@@ -1,7 +1,7 @@
-## Android CEL runtime
+## Mobile CEL runtime
 
-This is the Superwall Android CEL runtime library.
-It is a standalone library that can be used to evaluate CEL expressions in Android applications by using
+This is the Mobile Android CEL runtime library.
+It is a standalone library that can be used to evaluate CEL expressions in Mobile applications by using
 `cel-rust` crate.
 
 ## Installation
@@ -31,6 +31,9 @@ This will:
 - Copy the necessary files to the `./target/android/` folder.
 
 ## Usage
+
+
+### Android
 
 To use the library in your Android application, you need to:
 - Copy the `jniLibs` folder from `./target/android` to Android project's `superwall/src/main` folder.
@@ -65,6 +68,13 @@ The JSON is required to be in shape of `ExecutionContext`, which is defined as:
 }
 ```
 
+### iOS
+
+To use the library in your iOS application, you need to:
+
 ## Updating
 
-When updating the library, you need to pay attention to uniffi bindings
+When updating the library, you need to pay attention to uniffi bindings and ensure they match the signature of the library functions.
+While it is tempting to migrate the library to use uniffi for the entire library, we still need to use JSON
+for the input and output since UniFFI does not support recursive enums yet (such as PassableValue).
+For that, track this [issue](https://github.com/mozilla/uniffi-rs/issues/396) for updates.

@@ -1,12 +1,10 @@
-mod models;
 uniffi::include_scaffolding!("cel");
+mod models;
+use cel_interpreter::{Context, ExecutionError, Program, Value};
+use std::fmt;
+use ::serde::{Deserialize, Serialize};
+use crate::models::{ExecutionContext};
 
-use std::collections::HashMap;
-use cel_interpreter::{Context, ExecutionError, Expression, Program, Value};
-
-pub struct DisplayableValue(cel_interpreter::Value);
-
-pub struct DisplayableError(cel_interpreter::ExecutionError);
 
 pub fn evaluate_with_context(definition: String) -> String {
     let data: ExecutionContext = serde_json::from_str(definition.as_str()).unwrap();
@@ -34,9 +32,11 @@ pub fn evaluate_with_context(definition: String) -> String {
     }
 }
 
-use std::fmt;
-use ::serde::{Deserialize, Serialize};
-use crate::models::{ExecutionContext, PassableMap};
+
+// Wrappers around CEL values so we can create extensions on them
+pub struct DisplayableValue(cel_interpreter::Value);
+
+pub struct DisplayableError(cel_interpreter::ExecutionError);
 
 impl fmt::Display for DisplayableValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
