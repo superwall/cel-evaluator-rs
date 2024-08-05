@@ -85,8 +85,9 @@ impl fmt::Display for DisplayableError {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::PassableValue;
-    use crate::models::PassableValue::{Function, Int};
+    use std::collections::HashMap;
+    use crate::models::{PassableMap, PassableValue};
+    use crate::models::PassableValue::{Bool, Function, Int, Map};
     use super::*;
 
     #[test]
@@ -161,4 +162,35 @@ mod tests {
         "#.to_string());
         assert_eq!(res, "true");
     }
+
+    #[test]
+    fn test_execution_with_map() {
+        let definition = "foo + bar".to_string();
+        let res = evaluate_with_context(r#"
+        {
+                    "variables": {
+                        "map": {
+                            "user": {
+                                "type": "map",
+                                "value": {
+                                    "should_display": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "some_value": {
+                                        "type": "uint",
+                                        "value": 13
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "expression": "user.should_display == true && user.some_value > 12"
+    }
+
+        "#.to_string());
+        println!("{}",res);
+        assert_eq!(res, "true");
+    }
+
 }

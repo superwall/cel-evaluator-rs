@@ -24,7 +24,7 @@ pub(crate) enum PassableValue {
     #[serde(rename = "list")]
     List(Vec<PassableValue>),
     #[serde(rename = "map")]
-    Map(PassableMap),
+    Map(HashMap<String,PassableValue>),
     #[serde(rename = "function")]
     Function(String, Option<Box<PassableValue>>),
     #[serde(rename = "int")]
@@ -88,7 +88,7 @@ impl PassableValue {
                 Value::List(Arc::new(mapped_list))
             },
             PassableValue::Map(map) => {
-                let mapped_map = map.map.iter().map(|(k, v)| (Key::String(Arc::from(k.clone())),  (*v).to_cel())).collect();
+                let mapped_map = map.iter().map(|(k, v)| (Key::String(Arc::from(k.clone())),  (*v).to_cel())).collect();
                 Value::Map(Map { map: Arc::new(mapped_map) })
             },
             PassableValue::Function(name, arg) => {
@@ -128,7 +128,7 @@ impl DisplayableValue {
             Value::Map(map) => {
                 let mapped_map: HashMap<String,PassableValue> = map.map.iter().map(|(k, v)| (key_to_string(k.clone()),
                                                                    DisplayableValue(v.clone()).to_passable())).collect();
-                PassableValue::Map(PassableMap { map : mapped_map })
+                PassableValue::Map(mapped_map)
             },
             Value::Function(name, arg) => {
                 let mapped_arg = arg.as_ref().map(|arg| {
