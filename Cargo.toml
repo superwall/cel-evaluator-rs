@@ -21,4 +21,11 @@ uniffi = { version = "0.28", features = [ "build" ] }
 name = "uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
+[profile.release]
+opt-level = "z"  # Optimize for size.
+lto = true
+codegen-units = 1
+panic = "abort"
+strip=true
+
 [workspace.metadata.cross]
