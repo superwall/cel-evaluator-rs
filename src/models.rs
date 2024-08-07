@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
-use cel_interpreter::objects::{Key, Map, TryIntoValue};
+use cel_interpreter::objects::{Key, Map};
 use cel_interpreter::Value;
-use cel_interpreter::Value::Duration;
 use serde::{Deserialize, Serialize};
 use crate::DisplayableValue;
 
@@ -11,6 +9,7 @@ use crate::DisplayableValue;
 pub(crate) struct ExecutionContext {
     pub(crate) variables: PassableMap,
     pub(crate) expression: String,
+    pub(crate) platform: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize,Debug, PartialEq, Clone)]
