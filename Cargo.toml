@@ -1,12 +1,12 @@
 [package]
-name = "cel-android"
+name = "cel-eval"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.htmlž
 [lib]
-name = "celandroid"
-crate-type = ["cdylib"]
+name = "cel_eval"
+crate-type = ["staticlib","cdylib"]
 
 [dependencies]
 cel-interpreter = "0.8.1"

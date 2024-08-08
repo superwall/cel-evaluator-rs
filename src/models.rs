@@ -13,13 +13,13 @@ pub(crate) struct ExecutionContext {
 }
 
 #[derive(Serialize, Deserialize,Debug, PartialEq, Clone)]
-pub(crate) struct PassableMap {
-    pub(crate) map: HashMap<String, PassableValue>,
+pub struct PassableMap {
+    pub map: HashMap<String, PassableValue>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "value")]
-pub(crate) enum PassableValue {
+pub enum PassableValue {
     #[serde(rename = "list")]
     List(Vec<PassableValue>),
     #[serde(rename = "map")]
@@ -102,7 +102,6 @@ impl PassableValue {
             PassableValue::Bool(b) => Value::Bool(*b),
             PassableValue::Timestamp(t) => Value::Int(*t),
             PassableValue::Null => Value::Null,
-            _ => Value::Null,
         }
     }
 }
@@ -143,10 +142,9 @@ impl DisplayableValue {
             Value::String(s) => PassableValue::String((**s).clone()),
             Value::Bytes(b) => PassableValue::Bytes((**b).clone()),
             Value::Bool(b) => PassableValue::Bool(*b),
-            Value::Duration(d) => PassableValue::Null,
+            Value::Duration(_) => PassableValue::Null,
             Value::Timestamp(t) => PassableValue::Timestamp(t.timestamp()),
             Value::Null => PassableValue::Null,
-            _ => panic!("Unsupported Value variant"),
         }
     }
 }

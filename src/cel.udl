@@ -1,3 +1,8 @@
+[Trait]
+interface HostContext {
+   string computed_property(string name);
+};
+
 namespace cel {
- string evaluate_with_context(string definition);
+ string evaluate_with_context(string definition, HostContext context);
 };
