@@ -1,4 +1,5 @@
 rm -rf ./jniLibs
+set -e
 
 echo "Building for Android x86_64, armv7, aarch64:"
 

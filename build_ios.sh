@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "Building the rust library for binding generation"
 cargo build --lib
