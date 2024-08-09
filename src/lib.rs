@@ -4,7 +4,7 @@ mod models;
 use std::collections::HashMap;
 use cel_interpreter::{Context, ExecutionError, Expression, FunctionContext, Program, Value};
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use cel_interpreter::extractors::This;
 use cel_interpreter::objects::{Key, Map, TryIntoValue};
 use crate::models::{ExecutionContext, PassableValue};
@@ -16,43 +16,64 @@ pub trait HostContext: Send + Sync {
 }
 
 
-pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
+pub fn evaluate_with_context(definition: String, host: Box<dyn HostContext + 'static>) -> String {
     let data: ExecutionContext = serde_json::from_str(definition.as_str()).unwrap();
     let compiled = Program::compile(data.expression.as_str()).unwrap();
+    let host = Arc::new(Mutex::new(host));
     let mut ctx = Context::default();
 
-
+    // Add predefined variables locally to the context
     data.variables.map.iter().for_each(|it| {
         ctx.add_variable(it.0.as_str(), it.1.to_cel()).unwrap()
     });
+    // Add maybe function
     ctx.add_function("maybe", maybe);
 
     // This function is used to extract the value of a property from the host context
     // As UniFFi doesn't support recursive enums yet, we have to pass it in as a
     // JSON serialized string of a PassableValue from Host and deserialize it here
-    fn prop_for(name: String, ctx: &Arc<dyn HostContext>) -> Option<PassableValue> {
-        let val = ctx.computed_property(name);
+    fn prop_for(name: Arc<String>,
+                args: Option<Vec<PassableValue>>, ctx: &Box<dyn HostContext>) -> Option<PassableValue> {
+        // Get computed property
+        let val = ctx.computed_property(name.clone().to_string());
+        println!("{}", val);
+        // Deserialize the value
         let passable: Option<PassableValue> = serde_json::from_str(val.as_str())
-            .unwrap();
+            .unwrap_or(None);
+
         passable
     }
 
+
+
     let platform = data.platform;
     let platform = platform.unwrap().clone();
-    let clone = platform.clone();
-    let platform_properties: HashMap<Key, Value> = clone.iter().map(|it| {
+
+    // Create platform properties as a map of keys and function names
+    let platform_properties: HashMap<Key, Value> = platform.iter().map(|it| {
         (Key::String(Arc::new(it.0.clone())), Function(it.1.clone(), None).to_cel())
     }).collect();
 
+    // Add the map to the platform object
     ctx.add_variable("platform", Value::Map(Map { map: Arc::new(platform_properties) })).unwrap();
 
-    for it in clone.iter() {
+    // Add those functions to the context
+    // Add those functions to the context
+    for it in platform.iter() {
         let key = it.0.clone();
-        let x = prop_for(key.to_string(), &host).unwrap();
-        ctx.add_function(key.clone().as_str(), move |_ftx: &FunctionContext| {
-            Ok(x.to_cel())
+        let host_clone = Arc::clone(&host); // Clone the Arc to pass into the closure
+        let key_str = key.clone(); // Clone key for usage in the closure
+        ctx.add_function(key_str.as_str(), &move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
+            let fx = ftx.clone();
+            let name = fx.name.clone(); // Move the name into the closure
+            let args = fx.args.clone(); // Clone the arguments
+            let host = host_clone.lock().unwrap(); // Lock the host for safe access
+            prop_for(name.clone(), Some(args.iter().map(|expression|
+                DisplayableValue(ftx.ptx.resolve(expression).unwrap()).to_passable()).collect()), &*host)
+                .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| Ok(v.to_cel()))
         });
     }
+
 
     let val = compiled.execute(&ctx);
     match val {
@@ -158,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_variables() {
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: HashMap::new()
         });
         let res = evaluate_with_context(r#"
@@ -176,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_execution_with_ctx() {
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: HashMap::new()
         });
         let res = evaluate_with_context(r#"
@@ -195,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_custom_function_with_arg() {
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: HashMap::new()
         });
 
@@ -214,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_list_contains() {
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: HashMap::new()
         });
         let res = evaluate_with_context(r#"
@@ -240,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_execution_with_map() {
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: HashMap::new()
         });
         let res = evaluate_with_context(r#"
@@ -274,7 +295,7 @@ mod tests {
     fn test_execution_with_platform_reference() {
         let days_since = PassableValue::UInt(7);
         let days_since = serde_json::to_string(&days_since).unwrap();
-        let ctx = Arc::new(TestContext {
+        let ctx = Box::new(TestContext {
             map: [("daysSinceEvent".to_string(), days_since)].iter().cloned().collect()
         });
         let res = evaluate_with_context(r#"

@@ -17,7 +17,7 @@ To build the library, you'll need to install:
 To build the library, run:
 
 ```shell
-./build.sh
+./build_android.sh
 ```
 
 (note: for the first run you will need to `chmod +x build.sh` and wait a bit until the docker images are downloaded)
@@ -32,7 +32,6 @@ This will:
 
 ## Usage
 
-
 ### Android
 
 To use the library in your Android application, you need to:
@@ -41,7 +40,7 @@ To use the library in your Android application, you need to:
 
 
 The library exposes a single function currently:
-`fn evaluate_with_context(definition: String) -> String`
+`fn evaluate_with_context(definition: String, ctx: HostContext) -> String`
 
 This function takes in a JSON containing the variables to be used and the expression to evaluate and returns the result.
 The JSON is required to be in shape of `ExecutionContext`, which is defined as:
@@ -60,17 +59,45 @@ The JSON is required to be in shape of `ExecutionContext`, which is defined as:
           {"type": "int", "value": 2},
           {"type": "int", "value": 3}
         ]
+      },
+      // Functions for our platform object - signature will be changed soon to allow for args
+      "platform" : {
+        "functionName" : "fallbackValue"
       }
-
     }},
   // The expression to evaluate
   "expression": "foo == 100"
 }
 ```
 
+The `HostContext` object is a callback interface allowing us to invoke host (iOS/Android) functions from our Rust code.
+It provides a single function `computedProperty(name: String) -> String` that can be used to get the value of a property from the host.
+The function should return a JSON string containing the value of the property as `PassableValue`.
+
 ### iOS
 
 To use the library in your iOS application, you need to:
+
+1. Make the build script executable:
+- `chmod +x ./build_ios.sh`
+2. Run the build script:
+- `./build_ios.sh`
+3. Get the resulting XCframework from the `./target/xcframeworks/` folder and add it to your iOS project together 
+with generated swift files from `./target/ios`
+
+
+This should give you a `HostContext` protocol:
+```swift
+public protocol HostContextProtocol : AnyObject {
+    func computedProperty(name: String)  -> String   
+}
+```
+
+And a  `evaluateWithContext` method you can invoke:
+```swift
+public func evaluateWithContext(definition: String, context: HostContext) -> String
+```
+
 
 ## Updating
 

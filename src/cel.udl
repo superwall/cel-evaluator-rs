@@ -1,5 +1,4 @@
-[Trait]
-interface HostContext {
+callback interface HostContext {
    string computed_property(string name);
 };
 

@@ -54,26 +54,26 @@ echo "Preparing iOS Simulator library (universal binary)"
 mkdir -p ./target/xcframeworks/ios-simulator
 lipo -create ./target/aarch64-apple-ios-sim/release/libcel_eval.a \
     ./target/x86_64-apple-ios/release/libcel_eval.a \
-    -output ./target/xcframeworks/ios-simulator/libcel_eval.a
+    -output ./target/xcframeworks/ios-simulator/libcel.a
 
 # iOS Device (arm64)
 echo "Preparing iOS Device (arm64) library"
 mkdir -p ./target/xcframeworks/ios-device
-cp ./target/aarch64-apple-ios/release/libcel_eval.a ./target/xcframeworks/ios-device/
+cp ./target/aarch64-apple-ios/release/libcel_eval.a ./target/xcframeworks/ios-device/libcel.a
 
 # macOS (combined arm64 and x86_64)
 echo "Preparing macOS library (universal binary)"
 mkdir -p ./target/xcframeworks/macos
 lipo -create ./target/aarch64-apple-darwin/release/libcel_eval.a \
     ./target/x86_64-apple-darwin/release/libcel_eval.a \
-    -output ./target/xcframeworks/macos/libcel_eval.a
+    -output ./target/xcframeworks/macos/libcel.a
 
 echo "Building XCFramework"
 xcodebuild -create-xcframework \
-    -library ./target/xcframeworks/ios-simulator/libcel_eval.a -headers ./target/xcframeworks/headers/ios-simulator \
-    -library ./target/xcframeworks/ios-device/libcel_eval.a -headers ./target/xcframeworks/headers/ios-device \
-    -library ./target/xcframeworks/macos/libcel_eval.a -headers ./target/xcframeworks/headers/macos \
-    -output ./target/xcframeworks/celeval.xcframework
+    -library ./target/xcframeworks/ios-simulator/libcel.a -headers ./target/xcframeworks/headers/ios-simulator \
+    -library ./target/xcframeworks/ios-device/libcel.a -headers ./target/xcframeworks/headers/ios-device \
+    -library ./target/xcframeworks/macos/libcel.a -headers ./target/xcframeworks/headers/macos \
+    -output ./target/xcframeworks/libcel.xcframework
 
-echo "XCFramework built at ./target/xcframeworks/celandroid.xcframework"
+echo "XCFramework built at ./target/xcframeworks/libcel.xcframework"
 
