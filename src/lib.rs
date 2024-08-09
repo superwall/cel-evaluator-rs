@@ -58,12 +58,12 @@ pub fn evaluate_with_context(definition: String, host: Box<dyn HostContext + 'st
     ctx.add_variable("platform", Value::Map(Map { map: Arc::new(platform_properties) })).unwrap();
 
     // Add those functions to the context
-    // Add those functions to the context
     for it in platform.iter() {
+
         let key = it.0.clone();
         let host_clone = Arc::clone(&host); // Clone the Arc to pass into the closure
         let key_str = key.clone(); // Clone key for usage in the closure
-        ctx.add_function(key_str.as_str(), &move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
+        ctx.add_function(key_str.as_str(), move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
             let fx = ftx.clone();
             let name = fx.name.clone(); // Move the name into the closure
             let args = fx.args.clone(); // Clone the arguments
