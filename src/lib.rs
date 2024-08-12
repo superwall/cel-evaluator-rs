@@ -42,7 +42,7 @@ pub fn evaluate_ast_with_context(definition: String, host: Box<dyn HostContext +
  */
 pub fn evaluate_ast(ast: String) -> String {
     let data: JSONExpression = serde_json::from_str(ast.as_str()).unwrap();
-    let mut ctx = Context::default();
+    let ctx = Context::default();
     let res = ctx.resolve(&data.into()).unwrap();
     let res = DisplayableValue(res.clone());
     res.to_string()

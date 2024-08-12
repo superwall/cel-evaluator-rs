@@ -3,7 +3,6 @@ use std::sync::Arc;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use cel_parser::Member::{Attribute, Fields, Index};
 use serde::{Deserialize, Serialize};
-use crate::{HostContext};
 use crate::models::{PassableMap, PassableValue};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -170,7 +169,7 @@ impl From<JSONExpression> for Expression {
     }
 }
 
-impl From<JSONMember> for cel_parser::Member {
+impl From<JSONMember> for Member {
     fn from(member: JSONMember) -> Self {
         match member {
             JSONMember::Attribute(s) => Attribute(Arc::new(s)),

@@ -1,5 +1,7 @@
 .DS_Store
 **/.DS_Store
+**/.so
+**/.kt
 /target
 # Created by https://www.toptal.com/developers/gitignore/api/intellij,rust
 # Edit at https://www.toptal.com/developers/gitignore?templates=intellij,rust

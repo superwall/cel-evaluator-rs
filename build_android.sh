@@ -1,46 +1,41 @@
-rm -rf ./jniLibs
+#!/bin/bash
+
 set -e
 
 echo "Building for Android x86_64, armv7, aarch64:"
 
-export  ANDROID_NDK=r25b ANDROID_SDK=26 ANDROID_VERSION=11.0.0_r48 && cross build --target x86_64-linux-android --release --lib && \
-  cross build --target armv7-linux-androideabi --release --lib && \
-  cross build --target aarch64-linux-android --release --lib
+export ANDROID_NDK=r25b ANDROID_SDK=26 ANDROID_VERSION=11.0.0_r48
 
-echo "Copying results to jniLibs"
+build_targets=(
+    "x86_64-linux-android"
+    "armv7-linux-androideabi"
+    "aarch64-linux-android"
+)
 
-mkdir -p jniLibs/arm64-v8a/ && \
-    cp target/aarch64-linux-android/release/libcel_eval.so jniLibs/arm64-v8a/libuniffi_cel.so && \
-mkdir -p jniLibs/armeabi-v7a/ && \
-    cp target/armv7-linux-androideabi/release/libcel_eval.so jniLibs/armeabi-v7a/libuniffi_cel.so && \
-mkdir -p jniLibs/x86_64/ && \
-    cp target/x86_64-linux-android/release/libcel_eval.so jniLibs/x86_64/libuniffi_cel.so
+for target in "${build_targets[@]}"; do
+    echo "Building for $target"
+    cross build --target "$target" --release --lib
+done
 
-echo "Running UniFFI to generate kotlin bindings"
+echo "Copying results to target/android/jniLibs"
 
+target_dir="target/android"
+jniLibs_dir="${target_dir}/jniLibs"
+
+mkdir -p "${jniLibs_dir}"/{arm64-v8a,armeabi-v7a,x86_64}
+
+cp target/aarch64-linux-android/release/libcel_eval.so "${jniLibs_dir}/arm64-v8a/libuniffi_cel.so"
+cp target/armv7-linux-androideabi/release/libcel_eval.so "${jniLibs_dir}/armeabi-v7a/libuniffi_cel.so"
+cp target/x86_64-linux-android/release/libcel_eval.so "${jniLibs_dir}/x86_64/libuniffi_cel.so"
+
+echo "Running UniFFI to generate Kotlin bindings"
+mkdir -p "${target_dir}/java/uniffi/cel"
 cargo run --features=uniffi/cli \
     --bin uniffi-bindgen \
     generate src/cel.udl \
-    --language kotlin
-
-echo "Copying build results to /target/android"
-# Define the source directories and file
-src_dir_jniLibs="jniLibs"
-src_file_cel="src/uniffi/cel/cel.kt"
-
-# Define the target directory
-target_dir="target/android"
-
-# Create the target directories if they do not exist
-mkdir -p "${target_dir}/jniLibs"
-mkdir -p "${target_dir}/java/uniffi/cel"
-
-# Copy the generated SO files target directory
-cp -R "${src_dir_jniLibs}/." "${target_dir}/jniLibs/"
-
-# Copy the generated Kotlin interface to the target directory
-cp "${src_file_cel}" "${target_dir}/java/uniffi/cel/"
+    --language kotlin \
+    --out-dir ./target/android/java/uniffi/cel
 
 
-echo "Build done --- ✅ "
-printf "\e]8;;file://$(pwd)/target/android/\aFind your output in ./target/android/\n"
+echo "Build done --- ✅"
+printf "\e]8;;file://%s/%s\aFind your output in ./%s\n" "$(pwd)" "$target_dir" "$target_dir"
