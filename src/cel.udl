@@ -1,7 +1,9 @@
 callback interface HostContext {
-   string computed_property(string name);
+   string computed_property(string name, string args);
 };
 
 namespace cel {
  string evaluate_with_context(string definition, HostContext context);
+ string evaluate_ast_with_context(string definition, HostContext context);
+ string evaluate_ast(string ast);
 };
