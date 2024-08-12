@@ -1,6 +1,6 @@
 [package]
 name = "cel-eval"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.htmlž
@@ -10,6 +10,7 @@ crate-type = ["staticlib","cdylib"]
 
 [dependencies]
 cel-interpreter = "0.8.1"
+cel-parser = "0.7.1"
 uniffi = { version = "0.28" }
 serde = { version = "1.0", features = ["serde_derive"] }
 serde_json = { version = "1.0" }

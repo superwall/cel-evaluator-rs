@@ -3,14 +3,16 @@ use std::sync::Arc;
 use cel_interpreter::objects::{Key, Map};
 use cel_interpreter::Value;
 use serde::{Deserialize, Serialize};
-use crate::DisplayableValue;
+use crate::{DisplayableValue};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub(crate) struct ExecutionContext {
     pub(crate) variables: PassableMap,
     pub(crate) expression: String,
-    pub(crate) platform: Option<HashMap<String, String>>,
+    pub(crate) platform: Option<HashMap<String, Vec<PassableValue>>>,
 }
+
+
 
 #[derive(Serialize, Deserialize,Debug, PartialEq, Clone)]
 pub struct PassableMap {

@@ -32,6 +32,26 @@ This will:
 
 ## Usage
 
+The library defines three methods exposed to the host platform, which you can use depending on the type of
+expression you want to evaluate:
+
+```idl
+ // Evaluates a CEL expression with provided variables and platform callbacks
+ string evaluate_with_context(string definition, HostContext context);
+ 
+ // Evaluates a CEL AST expression with provided variables, platform callbacks
+ string evaluate_ast_with_context(string definition, HostContext context);
+ 
+ // Evaluates a pure CEL AST expression
+ string evaluate_ast(string ast);
+```
+
+The `HostContext` object is a callback interface allowing us to invoke host (iOS/Android) functions from our Rust code.
+It provides a single function `computedProperty(name: String, args: String) -> String` that can be used to get the value of a property from the host.
+The function passes in the name and the args (if required, serialized as JSON) of the dynamic function/property we want to invoke
+
+
+
 ### Android
 
 To use the library in your Android application, you need to:
