@@ -1,4 +1,6 @@
-callback interface HostContext {
+[Trait]
+interface HostContext {
+   [Async]
    string computed_property(string name, string args);
 };
 

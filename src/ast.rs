@@ -1,9 +1,9 @@
+use crate::models::{PassableMap, PassableValue};
+use cel_parser::Member::{Attribute, Fields, Index};
+use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use cel_parser::Member::{Attribute, Fields, Index};
-use serde::{Deserialize, Serialize};
-use crate::models::{PassableMap, PassableValue};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub(crate) struct ASTExecutionContext {
@@ -48,12 +48,20 @@ pub enum JSONUnaryOp {
 pub enum JSONExpression {
     Arithmetic(Box<JSONExpression>, JSONArithmeticOp, Box<JSONExpression>),
     Relation(Box<JSONExpression>, JSONRelationOp, Box<JSONExpression>),
-    Ternary(Box<JSONExpression>, Box<JSONExpression>, Box<JSONExpression>),
+    Ternary(
+        Box<JSONExpression>,
+        Box<JSONExpression>,
+        Box<JSONExpression>,
+    ),
     Or(Box<JSONExpression>, Box<JSONExpression>),
     And(Box<JSONExpression>, Box<JSONExpression>),
     Unary(JSONUnaryOp, Box<JSONExpression>),
     Member(Box<JSONExpression>, Box<JSONMember>),
-    FunctionCall(Box<JSONExpression>, Option<Box<JSONExpression>>, Vec<JSONExpression>),
+    FunctionCall(
+        Box<JSONExpression>,
+        Option<Box<JSONExpression>>,
+        Vec<JSONExpression>,
+    ),
     List(Vec<JSONExpression>),
     Map(Vec<(JSONExpression, JSONExpression)>),
     Atom(JSONAtom),
@@ -136,32 +144,31 @@ impl From<JSONExpression> for Expression {
                 Box::new((*true_expr).into()),
                 Box::new((*false_expr).into()),
             ),
-            JSONExpression::Or(left, right) => Expression::Or(
-                Box::new((*left).into()),
-                Box::new((*right).into()),
-            ),
-            JSONExpression::And(left, right) => Expression::And(
-                Box::new((*left).into()),
-                Box::new((*right).into()),
-            ),
-            JSONExpression::Unary(op, expr) => Expression::Unary(
-                op.into(),
-                Box::new((*expr).into()),
-            ),
-            JSONExpression::Member(expr, member) => Expression::Member(
-                Box::new((*expr).into()),
-                Box::new((*member).into()),
-            ),
+            JSONExpression::Or(left, right) => {
+                Expression::Or(Box::new((*left).into()), Box::new((*right).into()))
+            }
+            JSONExpression::And(left, right) => {
+                Expression::And(Box::new((*left).into()), Box::new((*right).into()))
+            }
+            JSONExpression::Unary(op, expr) => {
+                Expression::Unary(op.into(), Box::new((*expr).into()))
+            }
+            JSONExpression::Member(expr, member) => {
+                Expression::Member(Box::new((*expr).into()), Box::new((*member).into()))
+            }
             JSONExpression::FunctionCall(func, optional_expr, args) => Expression::FunctionCall(
                 Box::new((*func).into()),
                 optional_expr.map(|e| Box::new((*e).into())),
                 args.into_iter().map(|e| e.into()).collect(),
             ),
-            JSONExpression::List(items) => Expression::List(
-                items.into_iter().map(|e| e.into()).collect(),
-            ),
+            JSONExpression::List(items) => {
+                Expression::List(items.into_iter().map(|e| e.into()).collect())
+            }
             JSONExpression::Map(items) => Expression::Map(
-                items.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+                items
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
             ),
             JSONExpression::Atom(atom) => Expression::Atom(atom.into()),
             JSONExpression::Ident(s) => Expression::Ident(Arc::new(s)),
@@ -175,7 +182,10 @@ impl From<JSONMember> for Member {
             JSONMember::Attribute(s) => Attribute(Arc::new(s)),
             JSONMember::Index(expr) => Index(Box::new((*expr).into())),
             JSONMember::Fields(fields) => Fields(
-                fields.into_iter().map(|(k, v)| (Arc::new(k), v.into())).collect(),
+                fields
+                    .into_iter()
+                    .map(|(k, v)| (Arc::new(k), v.into()))
+                    .collect(),
             ),
         }
     }
@@ -213,32 +223,31 @@ impl From<Expression> for JSONExpression {
                 Box::new((*true_expr).into()),
                 Box::new((*false_expr).into()),
             ),
-            Expression::Or(left, right) => JSONExpression::Or(
-                Box::new((*left).into()),
-                Box::new((*right).into()),
-            ),
-            Expression::And(left, right) => JSONExpression::And(
-                Box::new((*left).into()),
-                Box::new((*right).into()),
-            ),
-            Expression::Unary(op, expr) => JSONExpression::Unary(
-                op.into(),
-                Box::new((*expr).into()),
-            ),
-            Expression::Member(expr, member) => JSONExpression::Member(
-                Box::new((*expr).into()),
-                Box::new((*member).into()),
-            ),
+            Expression::Or(left, right) => {
+                JSONExpression::Or(Box::new((*left).into()), Box::new((*right).into()))
+            }
+            Expression::And(left, right) => {
+                JSONExpression::And(Box::new((*left).into()), Box::new((*right).into()))
+            }
+            Expression::Unary(op, expr) => {
+                JSONExpression::Unary(op.into(), Box::new((*expr).into()))
+            }
+            Expression::Member(expr, member) => {
+                JSONExpression::Member(Box::new((*expr).into()), Box::new((*member).into()))
+            }
             Expression::FunctionCall(func, optional_expr, args) => JSONExpression::FunctionCall(
                 Box::new((*func).into()),
                 optional_expr.map(|e| Box::new((*e).into())),
                 args.into_iter().map(|e| e.into()).collect(),
             ),
-            Expression::List(items) => JSONExpression::List(
-                items.into_iter().map(|e| e.into()).collect(),
-            ),
+            Expression::List(items) => {
+                JSONExpression::List(items.into_iter().map(|e| e.into()).collect())
+            }
             Expression::Map(items) => JSONExpression::Map(
-                items.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+                items
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
             ),
             Expression::Atom(atom) => JSONExpression::Atom(atom.into()),
             Expression::Ident(s) => JSONExpression::Ident((*s).clone()),
@@ -290,7 +299,10 @@ impl From<Member> for JSONMember {
             Attribute(s) => JSONMember::Attribute((*s).clone()),
             Index(expr) => JSONMember::Index(Box::new((*expr).into())),
             Fields(fields) => JSONMember::Fields(
-                fields.into_iter().map(|(k, v)| ((*k).clone(), v.into())).collect(),
+                fields
+                    .into_iter()
+                    .map(|(k, v)| ((*k).clone(), v.into()))
+                    .collect(),
             ),
         }
     }
@@ -310,62 +322,68 @@ impl From<Atom> for JSONAtom {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cel_interpreter::Program;
+    use cel_parser::parser::ExpressionParser;
 
     #[test]
     fn test_ast_serializing() {
-            // ((5 + 3) > 7) && (name.length() in [5, 10, 15])
-            let expr = Expression::And(
-                Box::new(Expression::Relation(
-                    Box::new(Expression::Arithmetic(
-                        Box::new(Expression::Atom(Atom::Int(5))),
-                        ArithmeticOp::Add,
-                        Box::new(Expression::Atom(Atom::Int(3)))
-                    )),
-                    RelationOp::GreaterThan,
-                    Box::new(Expression::Atom(Atom::Int(7)))
+        // ((5 + 3) > 7) && (name.length() in [5, 10, 15])
+        let expr = Expression::And(
+            Box::new(Expression::Relation(
+                Box::new(Expression::Arithmetic(
+                    Box::new(Expression::Atom(Atom::Int(5))),
+                    ArithmeticOp::Add,
+                    Box::new(Expression::Atom(Atom::Int(3))),
                 )),
-                Box::new(Expression::Relation(
-                    Box::new(Expression::FunctionCall(
-                        Box::new(Expression::Member(
-                            Box::new(Expression::Ident(Arc::new("name".to_string()))),
-                            Box::new(Attribute(Arc::new("length".to_string())))
-                        )),
-                        None,
-                        vec![]
+                RelationOp::GreaterThan,
+                Box::new(Expression::Atom(Atom::Int(7))),
+            )),
+            Box::new(Expression::Relation(
+                Box::new(Expression::FunctionCall(
+                    Box::new(Expression::Member(
+                        Box::new(Expression::Ident(Arc::new("name".to_string()))),
+                        Box::new(Attribute(Arc::new("length".to_string()))),
                     )),
-                    RelationOp::In,
-                    Box::new(Expression::List(vec![
-                        Expression::Atom(Atom::Int(5)),
-                        Expression::Atom(Atom::Int(10)),
-                        Expression::Atom(Atom::Int(15))
-                    ]))
-                ))
-            );
+                    None,
+                    vec![],
+                )),
+                RelationOp::In,
+                Box::new(Expression::List(vec![
+                    Expression::Atom(Atom::Int(5)),
+                    Expression::Atom(Atom::Int(10)),
+                    Expression::Atom(Atom::Int(15)),
+                ])),
+            )),
+        );
 
-            // Convert to JSONExpression
-            let json_expr: JSONExpression = expr.clone().into();
+        // Convert to JSONExpression
+        let json_expr: JSONExpression = expr.clone().into();
 
-            // Serialize to JSON
-            let json_string = serde_json::to_string_pretty(&json_expr).unwrap();
+        // Serialize to JSON
+        let json_string = serde_json::to_string_pretty(&json_expr).unwrap();
 
-            println!("JSON representation:");
-            println!("{}", json_string);
+        println!("JSON representation:");
+        println!("{}", json_string);
 
-            // Deserialize back to JSONExpression
-            let deserialized_json_expr: JSONExpression = serde_json::from_str(&json_string).unwrap();
+        let text = "platform.myMethod(\"test\") == platform.name && user.test == 1";
+        let program = ExpressionParser::new().parse(text).unwrap();
+        let program: JSONExpression = program.into();
+        let serialized = serde_json::to_string_pretty(&program).unwrap();
+        println!("-----------–\n\n\n{}--------------\n\n", serialized);
+        // Deserialize back to JSONExpression
+        let deserialized_json_expr: JSONExpression = serde_json::from_str(&json_string).unwrap();
 
-            // Convert back to original Expression
-            let deserialized_expr: Expression = deserialized_json_expr.into();
+        // Convert back to original Expression
+        let deserialized_expr: Expression = deserialized_json_expr.into();
 
-            println!("\nDeserialized Expression:");
-            println!("{:?}", deserialized_expr);
+        println!("\nDeserialized Expression:");
+        println!("{:?}", deserialized_expr);
 
-            // Check if the original and deserialized expressions are equal
-            assert_eq!(expr, deserialized_expr);
-            println!("\nOriginal and deserialized expressions are equal!");
+        // Check if the original and deserialized expressions are equal
+        assert_eq!(expr, deserialized_expr);
+        println!("\nOriginal and deserialized expressions are equal!");
     }
 }
