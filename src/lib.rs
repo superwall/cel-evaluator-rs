@@ -1,18 +1,19 @@
 uniffi::include_scaffolding!("cel");
-mod models;
 mod ast;
+mod models;
 
-use std::collections::HashMap;
-use cel_interpreter::{Context, ExecutionError, Expression, FunctionContext, Program, Value};
-use std::fmt;
-use std::sync::{Arc, Mutex};
+use crate::ast::{ASTExecutionContext, JSONExpression};
+use crate::models::PassableValue::Function;
+use crate::models::{ExecutionContext, PassableMap, PassableValue};
+use crate::ExecutableType::{CompiledProgram, AST};
+use async_trait::async_trait;
 use cel_interpreter::extractors::This;
 use cel_interpreter::objects::{Key, Map, TryIntoValue};
-use crate::ast::{ASTExecutionContext, JSONExpression};
-use crate::ExecutableType::{AST, CompiledProgram};
-use crate::models::{ExecutionContext, PassableMap, PassableValue};
-use crate::models::PassableValue::{Function};
-
+use cel_interpreter::{Context, ExecutionError, Expression, FunctionContext, Program, Value};
+use std::collections::HashMap;
+use std::fmt;
+use std::ops::Deref;
+use std::sync::{Arc, Mutex};
 
 /**
  * Host context trait that defines the methods that the host context should implement,
@@ -20,8 +21,9 @@ use crate::models::PassableValue::{Function};
  * CEL expression during evaluation, such as `platform.daysSinceEvent("event_name")` or similar.
  */
 
+#[async_trait]
 pub trait HostContext: Send + Sync {
-    fn computed_property(&self, name: String, args: String) -> String;
+    async fn computed_property(&self, name: String, args: String) -> String;
 }
 
 /**
@@ -30,9 +32,15 @@ pub trait HostContext: Send + Sync {
  * @param host The host context to use for resolving properties
  * @return The result of the evaluation, either "true" or "false"
  */
-pub fn evaluate_ast_with_context(definition: String, host: Box<dyn HostContext + 'static>) -> String {
+pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
     let data: ASTExecutionContext = serde_json::from_str(definition.as_str()).unwrap();
-    execute_with(AST(data.expression.into()), data.variables, data.platform, host)
+    let host = host.clone();
+    execute_with(
+        AST(data.expression.into()),
+        data.variables,
+        data.platform,
+        host,
+    )
 }
 
 /**
@@ -48,7 +56,6 @@ pub fn evaluate_ast(ast: String) -> String {
     res.to_string()
 }
 
-
 /**
  * Evaluate a CEL expression with the given definition by compiling it first.
  * @param definition The definition of the expression, serialized as JSON. This defines the expression, the variables, and the platform properties.
@@ -56,8 +63,8 @@ pub fn evaluate_ast(ast: String) -> String {
  * @return The result of the evaluation, either "true" or "false"
  */
 
-pub fn evaluate_with_context(definition: String, host: Box<dyn HostContext + 'static>) -> String {
-    let data: Result<ExecutionContext,_> = serde_json::from_str(definition.as_str());
+pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
+    let data: Result<ExecutionContext, _> = serde_json::from_str(definition.as_str());
     let data = match data {
         Ok(data) => data,
         Err(e) => {
@@ -65,84 +72,134 @@ pub fn evaluate_with_context(definition: String, host: Box<dyn HostContext + 'st
         }
     };
     let compiled = Program::compile(data.expression.as_str()).unwrap();
-    execute_with(CompiledProgram(compiled), data.variables, data.platform, host)
+    println!("{}", data.platform.is_some());
+    execute_with(
+        CompiledProgram(compiled),
+        data.variables,
+        data.platform,
+        host,
+    )
 }
-
 
 /**
  Type of expression to be executed, either a compiled program or an AST.
 */
 enum ExecutableType {
     AST(Expression),
-    CompiledProgram(Program)
+    CompiledProgram(Program),
 }
 
 /**
-    * Execute a CEL expression, either compiled or pure AST; with the given context.
-    * @param executable The executable type, either an AST or a compiled program
-    * @param variables The variables to use in the expression
-    * @param platform The platform properties or functions to use in the expression
-    * @param host The host context to use for resolving properties
+ * Execute a CEL expression, either compiled or pure AST; with the given context.
+ * @param executable The executable type, either an AST or a compiled program
+ * @param variables The variables to use in the expression
+ * @param platform The platform properties or functions to use in the expression
+ * @param host The host context to use for resolving properties
  */
-fn execute_with(executable: ExecutableType, variables: PassableMap, platform: Option<HashMap<String, Vec<PassableValue>>>,
-                host: Box<dyn HostContext + 'static>) -> String {
+fn execute_with(
+    executable: ExecutableType,
+    variables: PassableMap,
+    platform: Option<HashMap<String, Vec<PassableValue>>>,
+    host: Arc<dyn HostContext + 'static>,
+) -> String {
+    let host = host.clone();
     let host = Arc::new(Mutex::new(host));
     let mut ctx = Context::default();
 
     // Add predefined variables locally to the context
-    variables.map.iter().for_each(|it| {
-        ctx.add_variable(it.0.as_str(), it.1.to_cel()).unwrap()
-    });
+    variables
+        .map
+        .iter()
+        .for_each(|it| ctx.add_variable(it.0.as_str(), it.1.to_cel()).unwrap());
     // Add maybe function
     ctx.add_function("maybe", maybe);
 
     // This function is used to extract the value of a property from the host context
     // As UniFFi doesn't support recursive enums yet, we have to pass it in as a
     // JSON serialized string of a PassableValue from Host and deserialize it here
-    fn prop_for(name: Arc<String>,
-                args: Option<Vec<PassableValue>>, ctx: &Box<dyn HostContext>) -> Option<PassableValue> {
+    fn prop_for(
+        name: Arc<String>,
+        args: Option<Vec<PassableValue>>,
+        ctx: &Arc<dyn HostContext>,
+    ) -> Option<PassableValue> {
         // Get computed property
-        let val = ctx.computed_property(name.clone().to_string(), serde_json::to_string(&args).unwrap());
+        let val = smol::block_on(async move {
+            let ctx = ctx.clone();
+
+            ctx.computed_property(
+                name.clone().to_string(),
+                serde_json::to_string(&args).unwrap(),
+            )
+            .await
+        });
         // Deserialize the value
-        let passable: Option<PassableValue> = serde_json::from_str(val.as_str())
-            .unwrap_or(None);
+        let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(None);
 
         passable
     }
 
-    let platform = platform.unwrap().clone();
+    let platform = platform.unwrap_or(HashMap::new()).clone();
 
     // Create platform properties as a map of keys and function names
-    let platform_properties: HashMap<Key, Value> = platform.iter().map(|it| {
-        let args = it.1.clone();
-        let args = if args.is_empty() { None } else { Some(Box::new(PassableValue::List(args))) };
-        let name = it.0.clone();
-        (Key::String(Arc::new(name.clone())), Function(name, args).to_cel())
-    }).collect();
+    let platform_properties: HashMap<Key, Value> = platform
+        .iter()
+        .map(|it| {
+            let args = it.1.clone();
+            let args = if args.is_empty() {
+                None
+            } else {
+                Some(Box::new(PassableValue::List(args)))
+            };
+            let name = it.0.clone();
+            (
+                Key::String(Arc::new(name.clone())),
+                Function(name, args).to_cel(),
+            )
+        })
+        .collect();
 
     // Add the map to the platform object
-    ctx.add_variable("platform", Value::Map(Map { map: Arc::new(platform_properties) })).unwrap();
+    ctx.add_variable(
+        "platform",
+        Value::Map(Map {
+            map: Arc::new(platform_properties),
+        }),
+    )
+    .unwrap();
 
     // Add those functions to the context
     for it in platform.iter() {
         let key = it.0.clone();
         let host_clone = Arc::clone(&host); // Clone the Arc to pass into the closure
         let key_str = key.clone(); // Clone key for usage in the closure
-        ctx.add_function(key_str.as_str(), move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
-            let fx = ftx.clone();
-            let name = fx.name.clone(); // Move the name into the closure
-            let args = fx.args.clone(); // Clone the arguments
-            let host = host_clone.lock().unwrap(); // Lock the host for safe access
-            prop_for(name.clone(), Some(args.iter().map(|expression|
-                DisplayableValue(ftx.ptx.resolve(expression).unwrap()).to_passable()).collect()), &*host)
-                .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| Ok(v.to_cel()))
-        });
+        ctx.add_function(
+            key_str.as_str(),
+            move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
+                let fx = ftx.clone();
+                let name = fx.name.clone(); // Move the name into the closure
+                let args = fx.args.clone(); // Clone the arguments
+                let host = host_clone.lock().unwrap(); // Lock the host for safe access
+                prop_for(
+                    name.clone(),
+                    Some(
+                        args.iter()
+                            .map(|expression| {
+                                DisplayableValue(ftx.ptx.resolve(expression).unwrap()).to_passable()
+                            })
+                            .collect(),
+                    ),
+                    &*host,
+                )
+                .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| {
+                    Ok(v.to_cel())
+                })
+            },
+        );
     }
 
-
     let val = match executable {
-        ExecutableType::AST(ast) => &ctx.resolve(&ast),
-        ExecutableType::CompiledProgram(program) => &program.execute(&ctx)
+        AST(ast) => &ctx.resolve(&ast),
+        CompiledProgram(program) => &program.execute(&ctx),
     };
 
     match val {
@@ -166,11 +223,10 @@ pub fn maybe(
     return ftx.ptx.resolve(&left).or_else(|_| ftx.ptx.resolve(&right));
 }
 
+// Wrappers around CEL values used so that we can create extensions on them
+pub struct DisplayableValue(Value);
 
-// Wrappers around CEL values so we can create extensions on them
-pub struct DisplayableValue(cel_interpreter::Value);
-
-pub struct DisplayableError(cel_interpreter::ExecutionError);
+pub struct DisplayableError(ExecutionError);
 
 impl fmt::Display for DisplayableValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -181,25 +237,38 @@ impl fmt::Display for DisplayableValue {
             Value::String(s) => write!(f, "{}", s),
             // Add more variants as needed
             Value::UInt(i) => write!(f, "{}", i),
-            Value::Bytes(_) => { write!(f, "{}", "bytes go here") }
+            Value::Bytes(_) => {
+                write!(f, "{}", "bytes go here")
+            }
             Value::Bool(b) => write!(f, "{}", b),
             Value::Duration(d) => write!(f, "{}", d),
             Value::Timestamp(t) => write!(f, "{}", t),
             Value::Null => write!(f, "{}", "null"),
             Value::Function(name, _) => write!(f, "{}", name),
             Value::Map(map) => {
-                let res: HashMap<String, String> = map.map.iter().map(|(k, v)| {
-                    let key = DisplayableValue(k.try_into_value().unwrap().clone()).to_string();
-                    let value = DisplayableValue(v.clone()).to_string().replace("\\", "");
-                    (key, value)
-                }).collect();
+                let res: HashMap<String, String> = map
+                    .map
+                    .iter()
+                    .map(|(k, v)| {
+                        let key = DisplayableValue(k.try_into_value().unwrap().clone()).to_string();
+                        let value = DisplayableValue(v.clone()).to_string().replace("\\", "");
+                        (key, value)
+                    })
+                    .collect();
                 let map = serde_json::to_string(&res).unwrap();
                 write!(f, "{}", map)
             }
-            Value::List(list) => write!(f, "{}", list.iter().map(|v| {
-                let key = DisplayableValue(v.clone());
-                return key.to_string();
-            }).collect::<Vec<_>>().join(",\n ")),
+            Value::List(list) => write!(
+                f,
+                "{}",
+                list.iter()
+                    .map(|v| {
+                        let key = DisplayableValue(v.clone());
+                        return key.to_string();
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",\n ")
+            ),
         }
     }
 }
@@ -218,17 +287,22 @@ impl fmt::Display for DisplayableError {
             ExecutionError::MissingArgumentOrTarget => write!(f, "MissingArgumentOrTarget"),
             ExecutionError::ValuesNotComparable(_, _) => write!(f, "ValuesNotComparable"),
             ExecutionError::UnsupportedUnaryOperator(_, _) => write!(f, "UnsupportedUnaryOperator"),
-            ExecutionError::UnsupportedBinaryOperator(_, _, _) => write!(f, "UnsupportedBinaryOperator"),
+            ExecutionError::UnsupportedBinaryOperator(_, _, _) => {
+                write!(f, "UnsupportedBinaryOperator")
+            }
             ExecutionError::UnsupportedMapIndex(_) => write!(f, "UnsupportedMapIndex"),
             ExecutionError::UnsupportedListIndex(_) => write!(f, "UnsupportedListIndex"),
             ExecutionError::UnsupportedIndex(_, _) => write!(f, "UnsupportedIndex"),
-            ExecutionError::UnsupportedFunctionCallIdentifierType(_) => write!(f, "UnsupportedFunctionCallIdentifierType"),
-            ExecutionError::UnsupportedFieldsConstruction(_) => write!(f, "UnsupportedFieldsConstruction"),
+            ExecutionError::UnsupportedFunctionCallIdentifierType(_) => {
+                write!(f, "UnsupportedFunctionCallIdentifierType")
+            }
+            ExecutionError::UnsupportedFieldsConstruction(_) => {
+                write!(f, "UnsupportedFieldsConstruction")
+            }
             ExecutionError::FunctionError { .. } => write!(f, "FunctionError"),
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -238,18 +312,20 @@ mod tests {
         map: HashMap<String, String>,
     }
 
+    #[async_trait]
     impl HostContext for TestContext {
-        fn computed_property(&self, name: String, args: String) -> String {
+        async fn computed_property(&self, name: String, args: String) -> String {
             self.map.get(&name).unwrap().to_string()
         }
     }
 
-    #[test]
-    fn test_variables() {
-        let ctx = Box::new(TestContext {
-            map: HashMap::new()
+    #[tokio::test]
+    async fn test_variables() {
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
         });
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
             "variables": {
              "map" : {
@@ -258,16 +334,20 @@ mod tests {
             "expression": "foo == 100"
         }
 
-        "#.to_string(), ctx);
+        "#
+            .to_string(),
+            ctx,
+        );
         assert_eq!(res, "true");
     }
 
-    #[test]
-    fn test_execution_with_ctx() {
-        let ctx = Box::new(TestContext {
-            map: HashMap::new()
+    #[tokio::test]
+    async fn test_execution_with_ctx() {
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
         });
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
             "variables": {
              "map" : {
@@ -277,17 +357,21 @@ mod tests {
             "expression": "foo + bar == 142"
         }
 
-        "#.to_string(), ctx);
+        "#
+            .to_string(),
+            ctx,
+        );
         assert_eq!(res, "true");
     }
 
     #[test]
-    fn test_custom_function_with_arg() {
-        let ctx = Box::new(TestContext {
-            map: HashMap::new()
+    fn test_unknown_function_with_arg_fails_with_undeclared_ref() {
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
         });
 
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
             "variables": {
              "map" : {
@@ -296,16 +380,20 @@ mod tests {
             "expression": "test_custom_func(foo) == 101"
         }
 
-        "#.to_string(), ctx);
-        assert_eq!(res, "true");
+        "#
+            .to_string(),
+            ctx,
+        );
+        assert_eq!(res, "UndeclaredReference");
     }
 
     #[test]
     fn test_list_contains() {
-        let ctx = Box::new(TestContext {
-            map: HashMap::new()
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
         });
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
             "variables": {
                  "map" : {
@@ -322,16 +410,20 @@ mod tests {
             "expression": "numbers.contains(2)"
         }
 
-        "#.to_string(), ctx);
+        "#
+            .to_string(),
+            ctx,
+        );
         assert_eq!(res, "true");
     }
 
-    #[test]
-    fn test_execution_with_map() {
-        let ctx = Box::new(TestContext {
-            map: HashMap::new()
+    #[tokio::test]
+    async fn test_execution_with_map() {
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
         });
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
                     "variables": {
                         "map": {
@@ -353,19 +445,26 @@ mod tests {
                     "expression": "user.should_display == true && user.some_value > 12"
        }
 
-        "#.to_string(), ctx);
+        "#
+            .to_string(),
+            ctx,
+        );
         println!("{}", res);
         assert_eq!(res, "true");
     }
 
-    #[test]
-    fn test_execution_with_platform_reference() {
+    #[tokio::test]
+    async fn test_execution_with_platform_reference() {
         let days_since = PassableValue::UInt(7);
         let days_since = serde_json::to_string(&days_since).unwrap();
-        let ctx = Box::new(TestContext {
-            map: [("daysSinceEvent".to_string(), days_since)].iter().cloned().collect()
+        let ctx = Arc::new(TestContext {
+            map: [("daysSinceEvent".to_string(), days_since)]
+                .iter()
+                .cloned()
+                .collect(),
         });
-        let res = evaluate_with_context(r#"
+        let res = evaluate_with_context(
+            r#"
         {
                     "variables": {
                         "map": {
@@ -392,9 +491,11 @@ mod tests {
                     },
                     "expression": "platform.daysSinceEvent(\"test\") == user.some_value"
         }
-        "#.to_string(), ctx);
+        "#
+            .to_string(),
+            ctx,
+        );
         println!("{}", res);
         assert_eq!(res, "true");
     }
-
 }

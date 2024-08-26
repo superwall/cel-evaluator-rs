@@ -1,6 +1,6 @@
 [package]
 name = "cel-eval"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.htmlž
@@ -14,7 +14,11 @@ cel-parser = "0.7.1"
 uniffi = { version = "0.28" }
 serde = { version = "1.0", features = ["serde_derive"] }
 serde_json = { version = "1.0" }
+async-trait = "0.1.81"
+smol = "2.0.1"
 
+[dev-dependencies]
+tokio = { version = "^1.20", features = ["rt-multi-thread", "macros"] }
 [build-dependencies]
 uniffi = { version = "0.28", features = [ "build" ] }
 

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::DisplayableValue;
 use cel_interpreter::objects::{Key, Map};
 use cel_interpreter::Value;
 use serde::{Deserialize, Serialize};
-use crate::{DisplayableValue};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub(crate) struct ExecutionContext {
@@ -12,9 +12,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) platform: Option<HashMap<String, Vec<PassableValue>>>,
 }
 
-
-
-#[derive(Serialize, Deserialize,Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct PassableMap {
     pub map: HashMap<String, PassableValue>,
 }
@@ -25,7 +23,7 @@ pub enum PassableValue {
     #[serde(rename = "list")]
     List(Vec<PassableValue>),
     #[serde(rename = "map")]
-    Map(HashMap<String,PassableValue>),
+    Map(HashMap<String, PassableValue>),
     #[serde(rename = "function")]
     Function(String, Option<Box<PassableValue>>),
     #[serde(rename = "int")]
@@ -50,7 +48,9 @@ impl PartialEq for PassableValue {
         match (self, other) {
             (PassableValue::Map(a), PassableValue::Map(b)) => a == b,
             (PassableValue::List(a), PassableValue::List(b)) => a == b,
-            (PassableValue::Function(a1, a2), PassableValue::Function(b1, b2)) => a1 == b1 && a2 == b2,
+            (PassableValue::Function(a1, a2), PassableValue::Function(b1, b2)) => {
+                a1 == b1 && a2 == b2
+            }
             (PassableValue::Int(a), PassableValue::Int(b)) => a == b,
             (PassableValue::UInt(a), PassableValue::UInt(b)) => a == b,
             (PassableValue::Float(a), PassableValue::Float(b)) => a == b,
@@ -79,23 +79,26 @@ impl PartialEq for PassableValue {
     }
 }
 
-
-
 impl PassableValue {
     pub fn to_cel(&self) -> Value {
         match self {
             PassableValue::List(list) => {
                 let mapped_list: Vec<Value> = list.iter().map(|item| item.to_cel()).collect();
                 Value::List(Arc::new(mapped_list))
-            },
+            }
             PassableValue::Map(map) => {
-                let mapped_map = map.iter().map(|(k, v)| (Key::String(Arc::from(k.clone())),  (*v).to_cel())).collect();
-                Value::Map(Map { map: Arc::new(mapped_map) })
-            },
+                let mapped_map = map
+                    .iter()
+                    .map(|(k, v)| (Key::String(Arc::from(k.clone())), (*v).to_cel()))
+                    .collect();
+                Value::Map(Map {
+                    map: Arc::new(mapped_map),
+                })
+            }
             PassableValue::Function(name, arg) => {
                 let mapped_arg = arg.as_ref().map(|arg| arg.to_cel());
                 Value::Function(Arc::from(name.clone()), mapped_arg.map(|v| Box::new(v)))
-            },
+            }
             PassableValue::Int(i) => Value::Int(*i),
             PassableValue::UInt(u) => Value::UInt(*u),
             PassableValue::Float(f) => Value::Float(*f),
@@ -113,31 +116,40 @@ fn key_to_string(key: Key) -> String {
         Key::String(s) => (*s).clone(),
         Key::Int(i) => i.to_string(),
         Key::Uint(u) => u.to_string(),
-        Key::Bool(b) => {b.to_string()}
+        Key::Bool(b) => b.to_string(),
     }
-
 }
 impl DisplayableValue {
     pub fn to_passable(&self) -> PassableValue {
         match &self.0 {
             Value::List(list) => {
-                let mapped_list: Vec<PassableValue> = list.iter().map(|item|
-                    DisplayableValue(item.clone()).to_passable()).collect();
+                let mapped_list: Vec<PassableValue> = list
+                    .iter()
+                    .map(|item| DisplayableValue(item.clone()).to_passable())
+                    .collect();
                 PassableValue::List(mapped_list)
-            },
+            }
             Value::Map(map) => {
-                let mapped_map: HashMap<String,PassableValue> = map.map.iter().map(|(k, v)| (key_to_string(k.clone()),
-                                                                   DisplayableValue(v.clone()).to_passable())).collect();
+                let mapped_map: HashMap<String, PassableValue> = map
+                    .map
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            key_to_string(k.clone()),
+                            DisplayableValue(v.clone()).to_passable(),
+                        )
+                    })
+                    .collect();
                 PassableValue::Map(mapped_map)
-            },
+            }
             Value::Function(name, arg) => {
                 let mapped_arg = arg.as_ref().map(|arg| {
                     let arg = *arg.clone();
                     let arg = DisplayableValue(arg).to_passable();
                     Box::new(arg)
                 });
-                PassableValue::Function( (**name).clone(), mapped_arg)
-            },
+                PassableValue::Function((**name).clone(), mapped_arg)
+            }
             Value::Int(i) => PassableValue::Int(*i),
             Value::UInt(u) => PassableValue::UInt(*u),
             Value::Float(f) => PassableValue::Float(*f),
