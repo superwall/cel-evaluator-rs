@@ -1,4 +1,4 @@
-[Trait]
+[Trait, WithForeign]
 interface HostContext {
    [Async]
    string computed_property(string name, string args);
