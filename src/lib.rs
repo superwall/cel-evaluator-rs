@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 uniffi::include_scaffolding!("cel");
 mod ast;
 mod models;
@@ -11,16 +12,34 @@ use cel_interpreter::extractors::This;
 use cel_interpreter::objects::{Key, Map, TryIntoValue};
 use cel_interpreter::{Context, ExecutionError, Expression, FunctionContext, Program, Value};
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
+use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, mpsc, Mutex};
+use std::thread::spawn;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::spawn_local;
+#[cfg(not(target_arch = "wasm32"))]
+use futures_lite::future::block_on;
 /**
  * Host context trait that defines the methods that the host context should implement,
  * i.e. iOS or Android calling code. This trait is used to resolve dynamic properties in the
  * CEL expression during evaluation, such as `platform.daysSinceEvent("event_name")` or similar.
  */
 
+#[async_trait]
+pub trait AsyncHostContext: Send + Sync {
+    async fn computed_property(&self, name: String, args: String) -> String;
+}
+
+#[cfg(target_arch = "wasm32")]
+pub trait HostContext: Send + Sync {
+    fn computed_property(&self, name: String, args: String) -> String;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait HostContext: Send + Sync {
     async fn computed_property(&self, name: String, args: String) -> String;
@@ -33,7 +52,7 @@ pub trait HostContext: Send + Sync {
  * @return The result of the evaluation, either "true" or "false"
  */
 pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
-    let data: ASTExecutionContext = serde_json::from_str(definition.as_str()).unwrap();
+    let data: ASTExecutionContext = serde_json::from_str(definition.as_str()).expect("Invalid context definition for AST Execution");
     let host = host.clone();
     execute_with(
         AST(data.expression.into()),
@@ -49,7 +68,7 @@ pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>)
  * @return The result of the evaluation, either "true" or "false"
  */
 pub fn evaluate_ast(ast: String) -> String {
-    let data: JSONExpression = serde_json::from_str(ast.as_str()).unwrap();
+    let data: JSONExpression = serde_json::from_str(ast.as_str()).expect("Invalid definition for AST Execution");
     let ctx = Context::default();
     let res = ctx.resolve(&data.into()).unwrap();
     let res = DisplayableValue(res.clone());
@@ -71,8 +90,7 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
             panic!("Error: {}", e.to_string());
         }
     };
-    let compiled = Program::compile(data.expression.as_str()).unwrap();
-    println!("{}", data.platform.is_some());
+    let compiled = Program::compile(data.expression.as_str()).expect("Failed to compile expression");
     execute_with(
         CompiledProgram(compiled),
         data.variables,
@@ -110,33 +128,54 @@ fn execute_with(
     variables
         .map
         .iter()
-        .for_each(|it| ctx.add_variable(it.0.as_str(), it.1.to_cel()).unwrap());
+        .for_each(|it| ctx.add_variable(it.0.as_str(), it.1.to_cel())
+            .expect(format!("Failed to add variable locally - {}", it.0).as_str()));
     // Add maybe function
     ctx.add_function("maybe", maybe);
 
     // This function is used to extract the value of a property from the host context
     // As UniFFi doesn't support recursive enums yet, we have to pass it in as a
     // JSON serialized string of a PassableValue from Host and deserialize it here
+    #[cfg(not(target_arch = "wasm32"))]
     fn prop_for(
         name: Arc<String>,
         args: Option<Vec<PassableValue>>,
         ctx: &Arc<dyn HostContext>,
     ) -> Option<PassableValue> {
         // Get computed property
-        let val = smol::block_on(async move {
+        let val = futures_lite::future::block_on(async move {
             let ctx = ctx.clone();
 
             ctx.computed_property(
                 name.clone().to_string(),
-                serde_json::to_string(&args).unwrap(),
+                serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
             )
             .await
         });
         // Deserialize the value
-        let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(None);
+        let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(Some(PassableValue::Null));
 
         passable
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn prop_for(
+        name: Arc<String>,
+        args: Option<Vec<PassableValue>>,
+        ctx: &Arc<dyn HostContext>,
+    ) -> Option<PassableValue> {
+        let ctx = ctx.clone();
+
+        let val = ctx.computed_property(
+                name.clone().to_string(),
+                serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
+        );
+        // Deserialize the value
+        let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(Some(PassableValue::Null));
+
+        passable
+    }
+
 
     let platform = platform.unwrap_or(HashMap::new()).clone();
 
@@ -230,77 +269,12 @@ pub struct DisplayableError(ExecutionError);
 
 impl fmt::Display for DisplayableValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Assuming Value is an enum with variants Integer, Float, and Str
-        match &self.0 {
-            Value::Int(i) => write!(f, "{}", i),
-            Value::Float(x) => write!(f, "{}", x),
-            Value::String(s) => write!(f, "{}", s),
-            // Add more variants as needed
-            Value::UInt(i) => write!(f, "{}", i),
-            Value::Bytes(_) => {
-                write!(f, "{}", "bytes go here")
-            }
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Duration(d) => write!(f, "{}", d),
-            Value::Timestamp(t) => write!(f, "{}", t),
-            Value::Null => write!(f, "{}", "null"),
-            Value::Function(name, _) => write!(f, "{}", name),
-            Value::Map(map) => {
-                let res: HashMap<String, String> = map
-                    .map
-                    .iter()
-                    .map(|(k, v)| {
-                        let key = DisplayableValue(k.try_into_value().unwrap().clone()).to_string();
-                        let value = DisplayableValue(v.clone()).to_string().replace("\\", "");
-                        (key, value)
-                    })
-                    .collect();
-                let map = serde_json::to_string(&res).unwrap();
-                write!(f, "{}", map)
-            }
-            Value::List(list) => write!(
-                f,
-                "{}",
-                list.iter()
-                    .map(|v| {
-                        let key = DisplayableValue(v.clone());
-                        return key.to_string();
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",\n ")
-            ),
-        }
+        self.0.fmt(f)
     }
 }
-
 impl fmt::Display for DisplayableError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Assuming Value is an enum with variants Integer, Float, and Str
-        match &self.0 {
-            ExecutionError::InvalidArgumentCount { .. } => write!(f, "InvalidArgumentCount"),
-            ExecutionError::UnsupportedTargetType { .. } => write!(f, "UnsupportedTargetType"),
-            ExecutionError::NotSupportedAsMethod { .. } => write!(f, "NotSupportedAsMethod"),
-            ExecutionError::UnsupportedKeyType(_) => write!(f, "UnsupportedKeyType"),
-            ExecutionError::UnexpectedType { .. } => write!(f, "UnexpectedType"),
-            ExecutionError::NoSuchKey(_) => write!(f, "NoSuchKey"),
-            ExecutionError::UndeclaredReference(_) => write!(f, "UndeclaredReference"),
-            ExecutionError::MissingArgumentOrTarget => write!(f, "MissingArgumentOrTarget"),
-            ExecutionError::ValuesNotComparable(_, _) => write!(f, "ValuesNotComparable"),
-            ExecutionError::UnsupportedUnaryOperator(_, _) => write!(f, "UnsupportedUnaryOperator"),
-            ExecutionError::UnsupportedBinaryOperator(_, _, _) => {
-                write!(f, "UnsupportedBinaryOperator")
-            }
-            ExecutionError::UnsupportedMapIndex(_) => write!(f, "UnsupportedMapIndex"),
-            ExecutionError::UnsupportedListIndex(_) => write!(f, "UnsupportedListIndex"),
-            ExecutionError::UnsupportedIndex(_, _) => write!(f, "UnsupportedIndex"),
-            ExecutionError::UnsupportedFunctionCallIdentifierType(_) => {
-                write!(f, "UnsupportedFunctionCallIdentifierType")
-            }
-            ExecutionError::UnsupportedFieldsConstruction(_) => {
-                write!(f, "UnsupportedFieldsConstruction")
-            }
-            ExecutionError::FunctionError { .. } => write!(f, "FunctionError"),
-        }
+        write!(f,"{}",self.0.to_string().as_str())
     }
 }
 

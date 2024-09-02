@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "build:browser": "webpack --config webpack.browser.js",
+    "build:node": "wasm-pack build --target nodejs --out-dir ./target/node",
+    "build": "npm run build:browser && npm run build:node"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "1.5.0",
+    "webpack": "^5.93.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.htmlž
 [lib]
 name = "cel_eval"
-crate-type = ["staticlib","cdylib"]
+crate-type = ["staticlib","cdylib", "rlib"]
+path = "src/lib.rs"
 
 [dependencies]
 cel-interpreter = "0.8.1"
@@ -15,7 +16,9 @@ uniffi = { version = "0.28" }
 serde = { version = "1.0", features = ["serde_derive"] }
 serde_json = { version = "1.0" }
 async-trait = "0.1.81"
-smol = "2.0.1"
+wasm-bindgen-futures = "0.4.43"
+futures-lite = "2.3.0"
+
 
 [dev-dependencies]
 tokio = { version = "^1.20", features = ["rt-multi-thread", "macros"] }
@@ -33,3 +36,5 @@ codegen-units = 1
 panic = "abort"
 strip=true
 
+[workspace]
+members = ["wasm"]
