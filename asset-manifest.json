@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/cel-evaluator-rs/static/css/main.e6c13ad2.css",
+    "main.js": "/cel-evaluator-rs/static/js/main.65b34748.js",
+    "module.wasm": "/cel-evaluator-rs/cb9e8c93255ed06b2cf9.module.wasm",
+    "index.html": "/cel-evaluator-rs/index.html",
+    "main.e6c13ad2.css.map": "/cel-evaluator-rs/static/css/main.e6c13ad2.css.map",
+    "main.65b34748.js.map": "/cel-evaluator-rs/static/js/main.65b34748.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.65b34748.js"
+  ]
+}
