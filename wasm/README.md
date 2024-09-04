@@ -9,20 +9,40 @@ This project demonstrates how to use WebAssembly (WASM) with Rust and JavaScript
 - [Node.js](https://nodejs.org/)
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 - [Cargo & Rust](https://www.rust-lang.org/tools/install)
+- [wasm-pack](https://github.com/rustwasm/wasm-pack/)
+
+
+### Setup
+- Install the prerequisites
+- Run `rustup target add wasm32-unknown-unknown` to add the WASM target
 
 ### Building the Project
 
-To build the project, you can use either of the following commands:
+To build the project, you need to:
 
+- Run `./build_wasm.sh`
+
+**OR**
+
+- Build the WASM project for the first time: `cargo build --lib --target wasm32-unknown-unknown`
+
+Then use:
 ```bash
 npm run build
 ```
 
-This will generate targets in the `/target/` directory
+This will generate targets in the `.target/` directory
 * `./target/browser` for browser environments
 * `./target/node` for Node.js environments
 
-(TODO: Add a script to build one module for both)
 
 ### Running the Project
+
+For **browsers**:
+
+- Open `./example/browser/` and run `npm install ../../target/browser && npm run start`
+
+For **node**:
+- Open `./example/` and run `node test_node.js`
+
 

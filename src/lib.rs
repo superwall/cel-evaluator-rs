@@ -269,7 +269,45 @@ pub struct DisplayableError(ExecutionError);
 
 impl fmt::Display for DisplayableValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
+        match &self.0 {
+            Value::Int(i) => write!(f, "{}", i),
+            Value::Float(x) => write!(f, "{}", x),
+            Value::String(s) => write!(f, "{}", s),
+            // Add more variants as needed
+            Value::UInt(i) => write!(f, "{}", i),
+            Value::Bytes(_) => {
+                write!(f, "{}", "bytes go here")
+            }
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Duration(d) => write!(f, "{}", d),
+            Value::Timestamp(t) => write!(f, "{}", t),
+            Value::Null => write!(f, "{}", "null"),
+            Value::Function(name, _) => write!(f, "{}", name),
+            Value::Map(map) => {
+                let res: HashMap<String, String> = map
+                    .map
+                    .iter()
+                    .map(|(k, v)| {
+                        let key = DisplayableValue(k.try_into_value().unwrap().clone()).to_string();
+                        let value = DisplayableValue(v.clone()).to_string().replace("\\", "");
+                        (key, value)
+                    })
+                    .collect();
+                let map = serde_json::to_string(&res).unwrap();
+                write!(f, "{}", map)
+            }
+            Value::List(list) => write!(
+                f,
+                "{}",
+                list.iter()
+                    .map(|v| {
+                        let key = DisplayableValue(v.clone());
+                        return key.to_string();
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",\n ")
+            ),
+        }
     }
 }
 impl fmt::Display for DisplayableError {

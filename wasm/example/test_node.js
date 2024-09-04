@@ -86,17 +86,9 @@ async function main() {
 }
 
 // Check if we're in a browser environment
-if (typeof window !== 'undefined') {
-    console.log("Browser environment detected");
-    console.log("Awaiting wasm")
-    console.log("WASM module loaded");
-    // Browser environment
-    main().catch(console.error);
-} else {
-    console.log("Node.js environment detected")
-    // Node.js environment
-    main().catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
-}
+console.log("Node.js environment detected")
+// Node.js environment
+main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+});
