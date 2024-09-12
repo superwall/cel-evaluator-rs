@@ -1,0 +1,17 @@
+name: Trigger SuperCEL-Android Workflow
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  trigger_ios_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CEL-Android Workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PAT }}
+          repository: superwall/SuperCEL-Android
+          event-type: update-build
