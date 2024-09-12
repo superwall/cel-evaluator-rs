@@ -1,0 +1,23 @@
+[package]
+name = "supercel-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cel-eval = { path = ".." }
+wasm-bindgen = "0.2.93"
+wasm-bindgen-futures = "0.4.43"
+futures = "0.3.30"
+console_error_panic_hook = "0.1.7"
+
+[profile.release]
+lto = true
+opt-level = "z"  # Optimize for size.
+codegen-units = 1
+panic = "abort"
+strip=true
