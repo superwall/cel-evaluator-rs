@@ -38,6 +38,8 @@ pub trait AsyncHostContext: Send + Sync {
 #[cfg(target_arch = "wasm32")]
 pub trait HostContext: Send + Sync {
     fn computed_property(&self, name: String, args: String) -> String;
+
+     fn device_property(&self, name: String, args: String) -> String;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -190,11 +192,11 @@ fn execute_with(
             PropType::Computed => ctx.computed_property(
                 name.clone().to_string(),
                 serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
-            ).await,
+            ),
             PropType::Device => ctx.device_property(
                 name.clone().to_string(),
                 serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
-            ).await,
+            ),
         };
         // Deserialize the value
         let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(Some(PassableValue::Null));
@@ -277,7 +279,7 @@ fn execute_with(
                 let args = fx.args.clone(); // Clone the arguments
                 let host = host_clone.lock().unwrap(); // Lock the host for safe access
                 prop_for(
-                    if(device.contains_key(&it.0))
+                    if device.contains_key(&it.0)
                         {PropType::Device}
                     else
                         {PropType::Computed},
