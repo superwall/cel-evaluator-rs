@@ -9,7 +9,8 @@ use std::sync::Arc;
 pub(crate) struct ASTExecutionContext {
     pub(crate) variables: PassableMap,
     pub(crate) expression: JSONExpression,
-    pub(crate) platform: Option<HashMap<String, Vec<PassableValue>>>,
+    pub(crate) computed: Option<HashMap<String, Vec<PassableValue>>>,
+    pub(crate) device: Option<HashMap<String, Vec<PassableValue>>>
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]

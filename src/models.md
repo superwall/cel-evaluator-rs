@@ -21,7 +21,7 @@ An example of `ExecutionContext` JSON for convenience:
                             }
                         }
                     },
-                    "platform" : {
+                    "computed" : {
                       "daysSinceEvent": [{
                                         "type": "string",
                                         "value": "event_name"

@@ -25,6 +25,10 @@ extern "C" {
 
     #[wasm_bindgen(method, catch)]
     fn computed_property(this: &JsHostContext, name: String, args: String) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(method, catch)]
+    fn device_property(this: &JsHostContext, name: String, args: String) -> Result<JsValue, JsValue>;
+
 }
 
 /**
@@ -67,6 +71,17 @@ impl HostContext for HostContextAdapter {
             .expect(
                 format!("Could not deserialize the result from computed property - Is some: {}", result.is_some()).as_str())
     }
+
+    fn device_property(&self, name: String, args: String) -> String {
+        let context = Arc::clone(&self.context);
+        let promise = context.device_property(name.clone(), args.clone());
+        let result = promise.expect("Did not receive the proper result from computed").as_string();
+        result
+            .clone()
+            .expect(
+                format!("Could not deserialize the result from computed property - Is some: {}", result.is_some()).as_str())
+    }
+
 }
 
 unsafe impl Send for HostContextAdapter {}

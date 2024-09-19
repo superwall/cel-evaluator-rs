@@ -81,9 +81,20 @@ The JSON is required to be in shape of `ExecutionContext`, which is defined as:
         ]
       },
       // Functions for our platform object - signature will be changed soon to allow for args
-      "platform" : {
-        "functionName" : "fallbackValue"
+      "computed" : {
+          "functionName": [{ // List of args
+                            "type": "string",
+                            "value": "event_name"
+                        }]
+      },
+      // Functions for our device object - signature will be changed soon to allow for args
+      "device" : {
+        "functionName": [{ // List of args
+          "type": "string",
+          "value": "event_name"
+        }]
       }
+
     }},
   // The expression to evaluate
   "expression": "foo == 100"
