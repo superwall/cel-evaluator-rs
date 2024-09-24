@@ -106,6 +106,11 @@ pub async fn evaluate_ast(ast: String) -> Result<String, JsValue> {
     Ok(cel_eval::evaluate_ast(ast))
 }
 
+#[wasm_bindgen]
+pub async fn parse_into_ast(expression: String) -> Result<String, JsValue> {
+    Ok(cel_eval::parse_into_ast(expression))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -18,28 +18,26 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread::spawn;
+use cel_parser::parse;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::spawn_local;
 #[cfg(not(target_arch = "wasm32"))]
 use futures_lite::future::block_on;
+
+
 /**
  * Host context trait that defines the methods that the host context should implement,
  * i.e. iOS or Android calling code. This trait is used to resolve dynamic properties in the
  * CEL expression during evaluation, such as `computed.daysSinceEvent("event_name")` or similar.
+ * Note: Since WASM async support in the browser is still not fully mature, we're using the
+ * target_arch cfg to define the trait methods differently for WASM and non-WASM targets.
  */
-
-#[async_trait]
-pub trait AsyncHostContext: Send + Sync {
-    async fn computed_property(&self, name: String, args: String) -> String;
-
-}
-
 #[cfg(target_arch = "wasm32")]
 pub trait HostContext: Send + Sync {
     fn computed_property(&self, name: String, args: String) -> String;
 
-     fn device_property(&self, name: String, args: String) -> String;
+    fn device_property(&self, name: String, args: String) -> String;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -48,7 +46,6 @@ pub trait HostContext: Send + Sync {
     async fn computed_property(&self, name: String, args: String) -> String;
 
     async fn device_property(&self, name: String, args: String) -> String;
-
 }
 
 /**
@@ -108,8 +105,20 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
 }
 
 /**
- Type of expression to be executed, either a compiled program or an AST.
-*/
+ * Transforms a given CEL expression into a CEL AST, serialized as JSON.
+ * @param expression The CEL expression to parse
+ * @return The AST of the expression, serialized as JSON
+ */
+pub fn parse_to_ast(expression: String) -> String {
+    let ast : JSONExpression = parse(expression.as_str()).expect(
+        format!("Failed to parse expression: {}", expression).as_str()
+    ).into();
+    serde_json::to_string(&ast).expect("Failed to serialize AST into JSON")
+}
+
+/**
+Type of expression to be executed, either a compiled program or an AST.
+ */
 enum ExecutableType {
     AST(Expression),
     CompiledProgram(Program),
@@ -171,7 +180,6 @@ fn execute_with(
                     serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
                 ).await,
             }
-
         });
         // Deserialize the value
         let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(Some(PassableValue::Null));
@@ -203,7 +211,6 @@ fn execute_with(
 
         passable
     }
-
 
     let computed = computed.unwrap_or(HashMap::new()).clone();
 
@@ -253,11 +260,11 @@ fn execute_with(
             map: Arc::new(computed_host_properties),
         }),
     )
-    .unwrap();
+        .unwrap();
 
     let binding = device.clone();
     // Combine the device and computed properties
-    let host_properties  = binding
+    let host_properties = binding
         .iter()
         .chain(computed.iter())
         .map(|(k, v)| (k.clone(), v.clone()))
@@ -280,9 +287,7 @@ fn execute_with(
                 let host = host_clone.lock().unwrap(); // Lock the host for safe access
                 prop_for(
                     if device.contains_key(&it.0)
-                        {PropType::Device}
-                    else
-                        {PropType::Computed},
+                    { PropType::Device } else { PropType::Computed },
                     name.clone(),
                     Some(
                         args.iter()
@@ -293,9 +298,9 @@ fn execute_with(
                     ),
                     &*host,
                 )
-                .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| {
-                    Ok(v.to_cel())
-                })
+                    .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| {
+                        Ok(v.to_cel())
+                    })
             },
         );
     }
@@ -374,9 +379,10 @@ impl fmt::Display for DisplayableValue {
         }
     }
 }
+
 impl fmt::Display for DisplayableError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"{}",self.0.to_string().as_str())
+        write!(f, "{}", self.0.to_string().as_str())
     }
 }
 
@@ -415,7 +421,7 @@ mod tests {
         }
 
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         assert_eq!(res, "true");
@@ -438,7 +444,7 @@ mod tests {
         }
 
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         assert_eq!(res, "true");
@@ -461,7 +467,7 @@ mod tests {
         }
 
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         assert_eq!(res, "Undeclared reference to 'test_custom_func'");
@@ -491,7 +497,7 @@ mod tests {
         }
 
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         assert_eq!(res, "true");
@@ -526,7 +532,7 @@ mod tests {
        }
 
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         println!("{}", res);
@@ -578,10 +584,31 @@ mod tests {
                     "expression": "computed.daysSinceEvent(\"test\") == user.some_value"
         }
         "#
-            .to_string(),
+                .to_string(),
             ctx,
         );
         println!("{}", res);
         assert_eq!(res, "true");
+    }
+
+
+    #[test]
+    fn test_parse_to_ast() {
+        let expression = "device.daysSince(app_install) == 3";
+        let ast_json = parse_to_ast(expression.to_string());
+        println!("\nSerialized AST:");
+        println!("{}", ast_json);
+        // Deserialize back to JSONExpression
+        let deserialized_json_expr: JSONExpression = serde_json::from_str(&ast_json).unwrap();
+
+        // Convert back to original Expression
+        let deserialized_expr: Expression = deserialized_json_expr.into();
+
+        println!("\nDeserialized Expression:");
+        println!("{:?}", deserialized_expr);
+
+        let parsed_expression = parse(expression).unwrap();
+        assert_eq!(parsed_expression, deserialized_expr);
+        println!("\nOriginal and deserialized expressions are equal!");
     }
 }

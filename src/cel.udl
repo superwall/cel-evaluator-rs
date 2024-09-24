@@ -11,4 +11,5 @@ namespace cel {
  string evaluate_with_context(string definition, HostContext context);
  string evaluate_ast_with_context(string definition, HostContext context);
  string evaluate_ast(string ast);
+ string parse_to_ast(string expression);
 };
