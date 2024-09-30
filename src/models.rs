@@ -9,7 +9,8 @@ use std::sync::Arc;
 pub(crate) struct ExecutionContext {
     pub(crate) variables: PassableMap,
     pub(crate) expression: String,
-    pub(crate) platform: Option<HashMap<String, Vec<PassableValue>>>,
+    pub(crate) computed: Option<HashMap<String, Vec<PassableValue>>>,
+    pub(crate) device: Option<HashMap<String, Vec<PassableValue>>>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
