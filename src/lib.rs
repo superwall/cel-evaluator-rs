@@ -110,7 +110,7 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
  * @return The AST of the expression, serialized as JSON
  */
 pub fn parse_to_ast(expression: String) -> String {
-    let ast : JSONExpression = parse(expression.as_str()).expect(
+    let ast: JSONExpression = parse(expression.as_str()).expect(
         format!("Failed to parse expression: {}", expression).as_str()
     ).into();
     serde_json::to_string(&ast).expect("Failed to serialize AST into JSON")
@@ -261,6 +261,16 @@ fn execute_with(
         }),
     )
         .unwrap();
+
+    // Add the map to the `device` object
+    ctx.add_variable(
+        "device",
+        Value::Map(Map {
+            map: Arc::new(device_host_properties),
+        }),
+    )
+        .unwrap();
+
 
     let binding = device.clone();
     // Combine the device and computed properties
@@ -540,51 +550,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_execution_with_platform_reference() {
+    async fn test_execution_with_platform_computed_reference() {
         let days_since = PassableValue::UInt(7);
         let days_since = serde_json::to_string(&days_since).unwrap();
         let ctx = Arc::new(TestContext {
-            map: [("daysSinceEvent".to_string(), days_since)]
+            map: [("minutesSince".to_string(), days_since)]
                 .iter()
                 .cloned()
                 .collect(),
         });
         let res = evaluate_with_context(
             r#"
-        {
-                    "variables": {
-                        "map": {
-                            "user": {
-                                "type": "map",
-                                "value": {
-                                    "should_display": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "some_value": {
-                                        "type": "uint",
-                                        "value": 7
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "computed" : {
-                      "daysSinceEvent": [{
-                                        "type": "string",
-                                        "value": "event_name"
-                                    }]
-                    },
-                    "device" : {
-                      "timeSinceEvent": [{
-                                        "type": "string",
-                                        "value": "event_name"
-                                    }]
-                    },
-                    "expression": "computed.daysSinceEvent(\"test\") == user.some_value"
+    {
+        "variables": {
+            "map": {}
+        },
+        "expression": "device.minutesSince('app_launch') == computed.minutesSince('app_install')",
+        "computed": {
+            "daysSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "minutesSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "hoursSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "monthsSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ]
+        },
+        "device": {
+            "daysSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "minutesSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "hoursSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "monthsSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ]
         }
-        "#
-                .to_string(),
+    }"#.to_string(),
             ctx,
         );
         println!("{}", res);
