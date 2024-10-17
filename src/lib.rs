@@ -65,7 +65,7 @@ pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>)
         data.computed,
         data.device,
         host,
-    ).map(|val| val.to_string())
+    ).map(|val| val.to_passable())
         .map_err(|err| err.to_string());
     serde_json::to_string(&res).unwrap()
 }
@@ -79,7 +79,7 @@ pub fn evaluate_ast(ast: String) -> String {
     let data: JSONExpression = serde_json::from_str(ast.as_str()).expect("Invalid definition for AST Execution");
     let ctx = Context::default();
     let res = ctx.resolve(&data.into())
-        .map(|val| DisplayableValue(val.clone()).to_string())
+        .map(|val| DisplayableValue(val.clone()).to_passable())
         .map_err(|err| DisplayableError(err).to_string());
     serde_json::to_string(&res).unwrap()
 }
@@ -109,7 +109,7 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
                 data.computed,
                 data.device,
                 host,
-            ).map(|val| val.to_string())
+            ).map(|val| val.to_passable())
                 .map_err(|err| err.to_string())
 
         }
@@ -474,7 +474,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -497,7 +497,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[test]
@@ -550,7 +550,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -586,7 +586,7 @@ mod tests {
             ctx,
         );
         println!("{}", res.clone());
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -695,7 +695,7 @@ mod tests {
             ctx,
         );
         println!("{}", res.clone());
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -781,7 +781,7 @@ mod tests {
             ctx,
         );
         println!("{}", res.clone());
-        assert_eq!(res, "{\"Ok\":\"true\"}");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
 
