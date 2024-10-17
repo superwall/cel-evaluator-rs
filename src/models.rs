@@ -24,7 +24,7 @@ pub enum PassableValue {
     #[serde(rename = "list")]
     List(Vec<PassableValue>),
     #[serde(rename = "map")]
-    Map(HashMap<String, PassableValue>),
+    PMap(HashMap<String, PassableValue>),
     #[serde(rename = "function")]
     Function(String, Option<Box<PassableValue>>),
     #[serde(rename = "int")]
@@ -47,7 +47,7 @@ pub enum PassableValue {
 impl PartialEq for PassableValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (PassableValue::Map(a), PassableValue::Map(b)) => a == b,
+            (PassableValue::PMap(a), PassableValue::PMap(b)) => a == b,
             (PassableValue::List(a), PassableValue::List(b)) => a == b,
             (PassableValue::Function(a1, a2), PassableValue::Function(b1, b2)) => {
                 a1 == b1 && a2 == b2
@@ -87,7 +87,7 @@ impl PassableValue {
                 let mapped_list: Vec<Value> = list.iter().map(|item| item.to_cel()).collect();
                 Value::List(Arc::new(mapped_list))
             }
-            PassableValue::Map(map) => {
+            PassableValue::PMap(map) => {
                 let mapped_map = map
                     .iter()
                     .map(|(k, v)| (Key::String(Arc::from(k.clone())), (*v).to_cel()))
@@ -141,7 +141,7 @@ impl DisplayableValue {
                         )
                     })
                     .collect();
-                PassableValue::Map(mapped_map)
+                PassableValue::PMap(mapped_map)
             }
             Value::Function(name, arg) => {
                 let mapped_arg = arg.as_ref().map(|arg| {

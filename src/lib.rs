@@ -6,6 +6,7 @@ mod models;
 use crate::ast::{ASTExecutionContext, JSONExpression};
 use crate::models::PassableValue::Function;
 use crate::models::{ExecutionContext, PassableMap, PassableValue};
+use crate::models::PassableValue::PMap;
 use crate::ExecutableType::{CompiledProgram, AST};
 use async_trait::async_trait;
 use cel_interpreter::extractors::This;
@@ -24,6 +25,7 @@ use cel_parser::parse;
 use wasm_bindgen_futures::spawn_local;
 #[cfg(not(target_arch = "wasm32"))]
 use futures_lite::future::block_on;
+use uniffi::deps::log::__private_api::log;
 
 
 /**
@@ -57,13 +59,15 @@ pub trait HostContext: Send + Sync {
 pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
     let data: ASTExecutionContext = serde_json::from_str(definition.as_str()).expect("Invalid context definition for AST Execution");
     let host = host.clone();
-    execute_with(
+    let res = execute_with(
         AST(data.expression.into()),
         data.variables,
         data.computed,
         data.device,
         host,
-    )
+    ).map(|val| val.to_passable())
+        .map_err(|err| err.to_string());
+    serde_json::to_string(&res).unwrap()
 }
 
 /**
@@ -74,9 +78,10 @@ pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>)
 pub fn evaluate_ast(ast: String) -> String {
     let data: JSONExpression = serde_json::from_str(ast.as_str()).expect("Invalid definition for AST Execution");
     let ctx = Context::default();
-    let res = ctx.resolve(&data.into()).unwrap();
-    let res = DisplayableValue(res.clone());
-    res.to_string()
+    let res = ctx.resolve(&data.into())
+        .map(|val| DisplayableValue(val.clone()).to_passable())
+        .map_err(|err| DisplayableError(err).to_string());
+    serde_json::to_string(&res).unwrap()
 }
 
 /**
@@ -94,14 +99,24 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
             panic!("Error: {}", e.to_string());
         }
     };
-    let compiled = Program::compile(data.expression.as_str()).expect("Failed to compile expression");
-    execute_with(
-        CompiledProgram(compiled),
-        data.variables,
-        data.computed,
-        data.device,
-        host,
-    )
+    let compiled = Program::compile(data.expression.as_str())
+        .map(|program| CompiledProgram(program));
+    let result = match compiled {
+        Ok(compiled) => {
+            execute_with(
+                compiled,
+                data.variables,
+                data.computed,
+                data.device,
+                host,
+            ).map(|val| val.to_passable())
+                .map_err(|err| err.to_string())
+
+        }
+        Err(e) =>
+            Err("Failed to compile expression".to_string())
+    };
+    serde_json::to_string(&result).unwrap()
 }
 
 /**
@@ -110,10 +125,10 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
  * @return The AST of the expression, serialized as JSON
  */
 pub fn parse_to_ast(expression: String) -> String {
-    let ast: JSONExpression = parse(expression.as_str()).expect(
-        format!("Failed to parse expression: {}", expression).as_str()
-    ).into();
-    serde_json::to_string(&ast).expect("Failed to serialize AST into JSON")
+    let ast: Result<JSONExpression, _> = parse(expression.as_str()).map(|expr| expr.into());
+    let ast = ast
+        .map_err(|err| err.to_string());
+    serde_json::to_string(&ast.unwrap()).unwrap()
 }
 
 /**
@@ -137,17 +152,21 @@ fn execute_with(
     computed: Option<HashMap<String, Vec<PassableValue>>>,
     device: Option<HashMap<String, Vec<PassableValue>>>,
     host: Arc<dyn HostContext + 'static>,
-) -> String {
+) -> Result<DisplayableValue, DisplayableError> {
     let host = host.clone();
     let host = Arc::new(Mutex::new(host));
     let mut ctx = Context::default();
+    // Isolate device to re-bind later
+    let device_map = variables.clone();
+    let device_map = device_map.map.get("device").clone().unwrap_or(&PMap(HashMap::new())).clone();
 
     // Add predefined variables locally to the context
     variables
         .map
         .iter()
-        .for_each(|it| ctx.add_variable(it.0.as_str(), it.1.to_cel())
-            .expect(format!("Failed to add variable locally - {}", it.0).as_str()));
+        .for_each(|it| {
+            let _ = ctx.add_variable(it.0.as_str(), it.1.to_cel());
+        });
     // Add maybe function
     ctx.add_function("maybe", maybe);
 
@@ -165,24 +184,37 @@ fn execute_with(
         name: Arc<String>,
         args: Option<Vec<PassableValue>>,
         ctx: &Arc<dyn HostContext>,
-    ) -> Option<PassableValue> {
+    ) -> Result<PassableValue, String> {
         // Get computed property
         let val = futures_lite::future::block_on(async move {
             let ctx = ctx.clone();
-
-            match prop_type {
-                PropType::Computed => ctx.computed_property(
-                    name.clone().to_string(),
-                    serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
-                ).await,
-                PropType::Device => ctx.device_property(
-                    name.clone().to_string(),
-                    serde_json::to_string(&args).expect("Failed to serialize args for computed property"),
-                ).await,
+            let args = if let Some(args) = args {
+                serde_json::to_string(&args)
+            } else {
+                serde_json::to_string::<Vec<PassableValue>>(&vec![])
+            };
+            match args {
+                Ok(args) => {
+                    match prop_type {
+                        PropType::Computed => Ok(ctx.computed_property(
+                            name.clone().to_string(),
+                            args,
+                        ).await),
+                        PropType::Device => Ok(ctx.device_property(
+                            name.clone().to_string(),
+                            args,
+                        ).await),
+                    }
+                }
+                Err(e) => {
+                    Err(ExecutionError::UndeclaredReference(name).to_string())
+                }
             }
         });
         // Deserialize the value
-        let passable: Option<PassableValue> = serde_json::from_str(val.as_str()).unwrap_or(Some(PassableValue::Null));
+        let passable: Result<PassableValue, String> =
+            val.map(|val| serde_json::from_str(val.as_str()).unwrap_or(PassableValue::Null))
+                .map_err(|err| err.to_string());
 
         passable
     }
@@ -234,6 +266,14 @@ fn execute_with(
 
     let device = device.unwrap_or(HashMap::new()).clone();
 
+
+    // From defined properties the device properties
+    let total_device_properties = if let PMap(map) = device_map {
+        map
+    } else {
+        HashMap::new()
+    };
+
     // Create device properties as a map of keys and function names
     let device_host_properties: HashMap<Key, Value> = device
         .iter()
@@ -250,26 +290,24 @@ fn execute_with(
                 Function(name, args).to_cel(),
             )
         })
+        .chain(total_device_properties.iter().map(|(k, v)| (Key::String(Arc::new(k.clone())), v.to_cel().clone())))
         .collect();
 
-
     // Add the map to the `computed` object
-    ctx.add_variable(
+    let _ = ctx.add_variable(
         "computed",
         Value::Map(Map {
             map: Arc::new(computed_host_properties),
         }),
-    )
-        .unwrap();
+    );
 
     // Add the map to the `device` object
-    ctx.add_variable(
+    let _ = ctx.add_variable(
         "device",
         Value::Map(Map {
             map: Arc::new(device_host_properties),
         }),
-    )
-        .unwrap();
+    );
 
 
     let binding = device.clone();
@@ -294,23 +332,33 @@ fn execute_with(
                 let fx = ftx.clone();
                 let name = fx.name.clone(); // Move the name into the closure
                 let args = fx.args.clone(); // Clone the arguments
-                let host = host_clone.lock().unwrap(); // Lock the host for safe access
-                prop_for(
-                    if device.contains_key(&it.0)
-                    { PropType::Device } else { PropType::Computed },
-                    name.clone(),
-                    Some(
-                        args.iter()
-                            .map(|expression| {
-                                DisplayableValue(ftx.ptx.resolve(expression).unwrap()).to_passable()
+                let host = host_clone.lock(); // Lock the host for safe access
+                match host {
+                    Ok(host) => {
+                        prop_for(
+                            if device.contains_key(&it.0)
+                            { PropType::Device } else { PropType::Computed },
+                            name.clone(),
+                            Some(
+                                args.iter()
+                                    .map(|expression| {
+                                        DisplayableValue(ftx.ptx.resolve(expression).unwrap()).to_passable()
+                                    })
+                                    .collect(),
+                            ),
+                            &*host,
+                        )
+                            .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| {
+                                Ok(v.to_cel())
                             })
-                            .collect(),
-                    ),
-                    &*host,
-                )
-                    .map_or(Err(ExecutionError::UndeclaredReference(name)), |v| {
-                        Ok(v.to_cel())
-                    })
+                    }
+                    Err(e) => {
+                        let e = e.to_string();
+                        let name = name.clone().to_string();
+                        let error = ExecutionError::FunctionError { function: name, message: e };
+                        Err(error)
+                    }
+                }
             },
         );
     }
@@ -320,16 +368,8 @@ fn execute_with(
         CompiledProgram(program) => &program.execute(&ctx),
     };
 
-    match val {
-        Ok(val) => {
-            let val = DisplayableValue(val.clone());
-            val.to_string()
-        }
-        Err(err) => {
-            let val = DisplayableError(err.clone());
-            val.to_string()
-        }
-    }
+    val.clone().map(|val| DisplayableValue(val.clone()))
+        .map_err(|err| DisplayableError(err))
 }
 
 pub fn maybe(
@@ -434,7 +474,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "true");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -457,7 +497,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "true");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[test]
@@ -480,7 +520,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "Undeclared reference to 'test_custom_func'");
+        assert_eq!(res, "{\"Err\":\"Undeclared reference to 'test_custom_func'\"}");
     }
 
     #[test]
@@ -510,7 +550,7 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        assert_eq!(res, "true");
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
     #[tokio::test]
@@ -545,9 +585,42 @@ mod tests {
                 .to_string(),
             ctx,
         );
-        println!("{}", res);
-        assert_eq!(res, "true");
+        println!("{}", res.clone());
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
+
+    #[tokio::test]
+    async fn test_execution_with_failure() {
+        let ctx = Arc::new(TestContext {
+            map: HashMap::new(),
+        });
+        let res = evaluate_with_context(
+            r#"
+        {
+                    "variables": {
+                        "map": {
+                            "user": {
+                                "type": "map",
+                                "value": {
+                                    "some_value": {
+                                        "type": "uint",
+                                        "value": 13
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "expression": "user.should_display == true && user.some_value > 12"
+       }
+
+        "#
+                .to_string(),
+            ctx,
+        );
+        println!("{}", res.clone());
+        assert_eq!(res, "{\"Err\":\"No such key: should_display\"}");
+    }
+
 
     #[tokio::test]
     async fn test_execution_with_platform_computed_reference() {
@@ -621,8 +694,94 @@ mod tests {
     }"#.to_string(),
             ctx,
         );
-        println!("{}", res);
-        assert_eq!(res, "true");
+        println!("{}", res.clone());
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
+    }
+
+    #[tokio::test]
+    async fn test_execution_with_platform_device_function_and_property() {
+        let days_since = PassableValue::UInt(7);
+        let days_since = serde_json::to_string(&days_since).unwrap();
+        let ctx = Arc::new(TestContext {
+            map: [("minutesSince".to_string(), days_since)]
+                .iter()
+                .cloned()
+                .collect(),
+        });
+        let res = evaluate_with_context(
+            r#"
+    {
+        "variables": {
+            "map": {
+                "device": {
+                    "type": "map",
+                    "value": {
+                        "trial_days": {
+                            "type": "uint",
+                            "value": 7
+                        }
+                    }
+                }
+            }
+        },
+        "expression": "device.minutesSince('app_launch') == device.trial_days",
+        "computed": {
+            "daysSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "minutesSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "hoursSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "monthsSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ]
+        },
+        "device": {
+            "daysSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "minutesSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "hoursSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ],
+            "monthsSince": [
+                {
+                    "type": "string",
+                    "value": "event_name"
+                }
+            ]
+        }
+    }"#.to_string(),
+            ctx,
+        );
+        println!("{}", res.clone());
+        assert_eq!(res, "{\"Ok\":{\"type\":\"bool\",\"value\":true}}");
     }
 
 
