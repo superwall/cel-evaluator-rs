@@ -61,7 +61,7 @@ pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>)
     let data = match data {
         Ok(data) => data,
         Err(_) => {
-            let e = Err("Invalid execution context JSON".to_string());
+            let e : Result<_, String> = Err::<ASTExecutionContext,String>("Invalid execution context JSON".to_string());
             return serde_json::to_string(&e).unwrap()
         }
     };
@@ -87,7 +87,7 @@ pub fn evaluate_ast(ast: String) -> String {
     let data : JSONExpression = match data {
         Ok(data) => data,
         Err(_) => {
-            let e = Err("Invalid definition for AST Execution".to_string());
+            let e : Result<_, String> = Err::<JSONExpression,String>("Invalid definition for AST Execution".to_string());
             return serde_json::to_string(&e).unwrap()
         }
     };
@@ -110,13 +110,7 @@ pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> 
     let data: ExecutionContext = match data {
         Ok(data) => data,
         Err(_) => {
-            let e = Err("Invalid execution context JSON".to_string());
-            return serde_json::to_string(&e).unwrap()
-        }
-    };
-    let data = match data {
-        Ok(data) => data,
-        Err(e) => {
+            let e : Result<ExecutionContext, String> = Err("Invalid execution context JSON".to_string());
             return serde_json::to_string(&e).unwrap()
         }
     };
