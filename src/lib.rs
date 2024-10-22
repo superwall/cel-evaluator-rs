@@ -57,7 +57,14 @@ pub trait HostContext: Send + Sync {
  * @return The result of the evaluation, either "true" or "false"
  */
 pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
-    let data: ASTExecutionContext = serde_json::from_str(definition.as_str()).expect("Invalid context definition for AST Execution");
+    let data: Result<ASTExecutionContext,_> = serde_json::from_str(definition.as_str());
+    let data = match data {
+        Ok(data) => data,
+        Err(_) => {
+            let e = Err("Invalid execution context JSON".to_string());
+            return serde_json::to_string(&e).unwrap()
+        }
+    };
     let host = host.clone();
     let res = execute_with(
         AST(data.expression.into()),
@@ -76,7 +83,14 @@ pub fn evaluate_ast_with_context(definition: String, host: Arc<dyn HostContext>)
  * @return The result of the evaluation, either "true" or "false"
  */
 pub fn evaluate_ast(ast: String) -> String {
-    let data: JSONExpression = serde_json::from_str(ast.as_str()).expect("Invalid definition for AST Execution");
+    let data: Result<JSONExpression,_> = serde_json::from_str(ast.as_str());
+    let data : JSONExpression = match data {
+        Ok(data) => data,
+        Err(_) => {
+            let e = Err("Invalid definition for AST Execution".to_string());
+            return serde_json::to_string(&e).unwrap()
+        }
+    };
     let ctx = Context::default();
     let res = ctx.resolve(&data.into())
         .map(|val| DisplayableValue(val.clone()).to_passable())
@@ -92,11 +106,18 @@ pub fn evaluate_ast(ast: String) -> String {
  */
 
 pub fn evaluate_with_context(definition: String, host: Arc<dyn HostContext>) -> String {
-    let data: Result<ExecutionContext, _> = serde_json::from_str(definition.as_str());
+    let data: Result<ExecutionContext,_> = serde_json::from_str(definition.as_str());
+    let data: ExecutionContext = match data {
+        Ok(data) => data,
+        Err(_) => {
+            let e = Err("Invalid execution context JSON".to_string());
+            return serde_json::to_string(&e).unwrap()
+        }
+    };
     let data = match data {
         Ok(data) => data,
         Err(e) => {
-            panic!("Error: {}", e.to_string());
+            return serde_json::to_string(&e).unwrap()
         }
     };
     let compiled = Program::compile(data.expression.as_str())

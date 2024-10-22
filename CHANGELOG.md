@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.1.11
+
+## Enhancements
+
+- Adds new Android target
+- Ensures JSON deserialization is done in a safe manner
+
 ## 0.1.10
 
 ## Enhancements

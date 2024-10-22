@@ -9,7 +9,8 @@ export ANDROID_NDK=r25b ANDROID_SDK=26 ANDROID_VERSION=11.0.0_r48
 build_targets=(
     "x86_64-linux-android"
     "armv7-linux-androideabi"
-    "aarch64-linux-android"
+    "aarch64-linux-android",
+    "i686-linux-android"
 )
 
 for target in "${build_targets[@]}"; do
@@ -27,6 +28,7 @@ mkdir -p "${jniLibs_dir}"/{arm64-v8a,armeabi-v7a,x86_64}
 cp target/aarch64-linux-android/release/libcel_eval.so "${jniLibs_dir}/arm64-v8a/libuniffi_cel.so"
 cp target/armv7-linux-androideabi/release/libcel_eval.so "${jniLibs_dir}/armeabi-v7a/libuniffi_cel.so"
 cp target/x86_64-linux-android/release/libcel_eval.so "${jniLibs_dir}/x86_64/libuniffi_cel.so"
+cp target/i686-linux-android/release/libcel_eval.so "${jniLibs_dir}/i686/libuniffi_cel.so"
 
 echo "Running UniFFI to generate Kotlin bindings"
 mkdir -p "${target_dir}/java/uniffi/cel"
