@@ -1,12 +1,17 @@
 # CHANGELOG
 
+## 0.1.11
+
+## Enhancements
+
+- Adds new Android target
+- Ensures JSON deserialization is done in a safe manner
+
 ## 0.1.10
 
 ## Enhancements
 
 - Updates github workflow for the renaming of the iOS repository.
-- Adds new Android target
-- Ensures JSON deserialization is done in a safe manner
 
 ## 0.1.9
 
