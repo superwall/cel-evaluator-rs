@@ -1,4 +1,4 @@
-name: Trigger SuperCEL-iOS Workflow
+name: Trigger Superscript-iOS Workflow
 
 on:
   push:
@@ -9,9 +9,9 @@ jobs:
   trigger_ios_build:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger cel-iOS Workflow
+      - name: Trigger Superscript-iOS Workflow
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.PAT }}
-          repository: superwall/SuperCEL-iOS
+          repository: superwall/Superscript-iOS
           event-type: update-build
