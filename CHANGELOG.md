@@ -5,6 +5,8 @@
 ## Enhancements
 
 - Updates github workflow for the renaming of the iOS repository.
+- Adds new Android target
+- Ensures JSON deserialization is done in a safe manner
 
 ## 0.1.9
 
