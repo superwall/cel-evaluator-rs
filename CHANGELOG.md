@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.1.12
+
+## Fixes
+
+- Adds Result types to fix issues when building for iOS.
+
 ## 0.1.11
 
 ## Enhancements
