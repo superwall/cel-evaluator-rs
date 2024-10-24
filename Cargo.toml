@@ -31,10 +31,10 @@ path = "uniffi-bindgen.rs"
 
 [profile.release]
 opt-level = "z"  # Optimize for size.
-lto = true
+lto = "fat"
 codegen-units = 1
 panic = "abort"
-strip=true
+strip = true
 
 [workspace]
 members = ["wasm"]
