@@ -18,8 +18,10 @@ for TARGET in \
         aarch64-apple-darwin \
         aarch64-apple-ios \
         aarch64-apple-ios-sim \
+        aarch64-apple-ios-macabi \
         x86_64-apple-darwin \
-        x86_64-apple-ios
+        x86_64-apple-ios \
+        x86_64-apple-ios-macabi
 
 do
     rustup target add $TARGET
@@ -44,6 +46,7 @@ rm -rf ./target/xcframeworks
 mkdir -p ./target/xcframeworks/headers/ios-simulator
 mkdir -p ./target/xcframeworks/headers/ios-device
 mkdir -p ./target/xcframeworks/headers/macos
+mkdir -p ./target/xcframeworks/headers/catalyst
 
 # Copy headers
 cp -R ./target/ios/* ./target/xcframeworks/headers/ios-simulator/
@@ -53,27 +56,35 @@ cp -R ./target/ios/* ./target/xcframeworks/headers/macos/
 # iOS Simulator (combined arm64 and x86_64)
 echo "Preparing iOS Simulator library (universal binary)"
 mkdir -p ./target/xcframeworks/ios-simulator
-lipo -create ./target/aarch64-apple-ios-sim/release/libcel_eval.a \
-    ./target/x86_64-apple-ios/release/libcel_eval.a \
-    -output ./target/xcframeworks/ios-simulator/libcel.a
+lipo -create ./target/aarch64-apple-ios-sim/release/libcel_eval.dylib \
+    ./target/x86_64-apple-ios/release/libcel_eval.dylib \
+    -output ./target/xcframeworks/ios-simulator/libcel.dylib
 
 # iOS Device (arm64)
 echo "Preparing iOS Device (arm64) library"
 mkdir -p ./target/xcframeworks/ios-device
-cp ./target/aarch64-apple-ios/release/libcel_eval.a ./target/xcframeworks/ios-device/libcel.a
+cp ./target/aarch64-apple-ios/release/libcel_eval.dylib ./target/xcframeworks/ios-device/libcel.dylib
 
 # macOS (combined arm64 and x86_64)
 echo "Preparing macOS library (universal binary)"
 mkdir -p ./target/xcframeworks/macos
-lipo -create ./target/aarch64-apple-darwin/release/libcel_eval.a \
-    ./target/x86_64-apple-darwin/release/libcel_eval.a \
-    -output ./target/xcframeworks/macos/libcel.a
+lipo -create ./target/aarch64-apple-darwin/release/libcel_eval.dylib \
+    ./target/x86_64-apple-darwin/release/libcel_eval.dylib \
+    -output ./target/xcframeworks/macos/libcel.dylib
+
+# Mac Catalyst (combined arm64 and x86_64)
+echo "Preparing Mac Catalyst library (universal binary)"
+mkdir -p ./target/xcframeworks/catalyst
+lipo -create ./target/aarch64-apple-ios-macabi/release/libcel_eval.dylib \
+    ./target/x86_64-apple-ios-macabi/release/libcel_eval.dylib \
+    -output ./target/xcframeworks/catalyst/libcel.dylib
 
 echo "Building XCFramework"
 xcodebuild -create-xcframework \
-    -library ./target/xcframeworks/ios-simulator/libcel.a -headers ./target/xcframeworks/headers/ios-simulator \
-    -library ./target/xcframeworks/ios-device/libcel.a -headers ./target/xcframeworks/headers/ios-device \
-    -library ./target/xcframeworks/macos/libcel.a -headers ./target/xcframeworks/headers/macos \
+    -library ./target/xcframeworks/ios-simulator/libcel.dylib -headers ./target/xcframeworks/headers/ios-simulator \
+    -library ./target/xcframeworks/ios-device/libcel.dylib -headers ./target/xcframeworks/headers/ios-device \
+    -library ./target/xcframeworks/macos/libcel.dylib -headers ./target/xcframeworks/headers/macos \
+    -library ./target/xcframeworks/catalyst/libcel.dylib -headers ./target/xcframeworks/headers/catalyst \
     -output ./target/xcframeworks/libcel.xcframework
 
 echo "XCFramework built at ./target/xcframeworks/libcel.xcframework"
