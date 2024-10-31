@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.1.15
+- Add watchOS, visionOS and Catalyst targets
+
 ## 0.1.12
 
 ### Fixes
