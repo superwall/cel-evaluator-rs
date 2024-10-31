@@ -76,7 +76,6 @@ cargo run --features=uniffi/cli \
      generate src/cel.udl \
      --language swift \
      --out-dir ./target/ios/
-
 # Add the iOS targets and build
 for TARGET in \
         aarch64-apple-darwin \
@@ -89,8 +88,25 @@ for TARGET in \
 do
     rustup target add $TARGET
     echo "Building for $TARGET"
-    cargo build --target=$TARGET --lib --release
+    cargo +nightly build --target=$TARGET --lib --release
 done
+
+# For visionOS device
+SDKROOT="$(xcrun --sdk xros --show-sdk-path)" \
+cargo +nightly build -Zbuild-std=std,core,alloc,panic_abort --target=aarch64-apple-visionos --lib --release
+# For visionOS simulator
+SDKROOT="$(xcrun --sdk xrsimulator --show-sdk-path)" \
+cargo +nightly build -Zbuild-std=std,core,alloc,panic_abort --target=aarch64-apple-visionos-sim --lib --release
+
+# For watchOS device
+SDKROOT="$(xcrun --sdk watchos --show-sdk-path)" \
+cargo +nightly build -Zbuild-std=std,core,alloc,panic_abort --target=arm64_32-apple-watchos --lib --release
+# For watchOS simulator
+SDKROOT="$(xcrun --sdk watchsimulator --show-sdk-path)" \
+cargo +nightly build -Zbuild-std=std,core,alloc,panic_abort --target=aarch64-apple-watchos-sim --lib --release
+SDKROOT="$(xcrun --sdk watchsimulator --show-sdk-path)" \
+cargo +nightly build -Zbuild-std=std,core,alloc,panic_abort --target=x86_64-apple-watchos-sim --lib --release
+
 
 # Rename *.modulemap to module.modulemap
 mv ./target/ios/celFFI.modulemap ./target/ios/module.modulemap
@@ -101,6 +117,8 @@ rm -rf target/ios/macos.xcframework
 mkdir -p ./target/ios-sim/release/
 mkdir -p ./target/ios/release/
 mkdir -p ./target/macos/release/
+mkdir -p ./target/visionos/release/
+mkdir -p ./target/watchos/release/
 
 # Clean up previous build artifacts
 rm -rf ./target/xcframeworks
@@ -110,11 +128,20 @@ mkdir -p ./target/xcframeworks/headers/ios-simulator
 mkdir -p ./target/xcframeworks/headers/ios-device
 mkdir -p ./target/xcframeworks/headers/macos
 mkdir -p ./target/xcframeworks/headers/catalyst
+mkdir -p ./target/xcframeworks/headers/visionos-simulator
+mkdir -p ./target/xcframeworks/headers/visionos-device
+mkdir -p ./target/xcframeworks/headers/watchos-simulator
+mkdir -p ./target/xcframeworks/headers/watchos-device
 
 # Copy headers
 cp -R ./target/ios/* ./target/xcframeworks/headers/ios-simulator/
 cp -R ./target/ios/* ./target/xcframeworks/headers/ios-device/
 cp -R ./target/ios/* ./target/xcframeworks/headers/macos/
+cp -R ./target/ios/* ./target/xcframeworks/headers/catalyst/
+cp -R ./target/ios/* ./target/xcframeworks/headers/visionos-simulator/
+cp -R ./target/ios/* ./target/xcframeworks/headers/visionos-device/
+cp -R ./target/ios/* ./target/xcframeworks/headers/watchos-simulator/
+cp -R ./target/ios/* ./target/xcframeworks/headers/watchos-device/
 
 # iOS Simulator (combined arm64 and x86_64)
 echo "Preparing iOS Simulator library (universal binary)"
@@ -145,12 +172,43 @@ lipo -create ./target/aarch64-apple-ios-macabi/release/libcel_eval.a \
     ./target/x86_64-apple-ios-macabi/release/libcel_eval.a \
     -output ./target/xcframeworks/catalyst/libcel.a
 strip -x ./target/xcframeworks/catalyst/libcel.a
+
+# visionOS Simulator (arm64)
+echo "Preparing visionOS Simulator library"
+mkdir -p ./target/xcframeworks/visionos-simulator
+cp ./target/aarch64-apple-visionos-sim/release/libcel_eval.a ./target/xcframeworks/visionos-simulator/libcel.a
+strip -x ./target/xcframeworks/visionos-simulator/libcel.a
+
+# visionOS Device (arm64)
+echo "Preparing visionOS Device library"
+mkdir -p ./target/xcframeworks/visionos-device
+cp ./target/aarch64-apple-visionos/release/libcel_eval.a ./target/xcframeworks/visionos-device/libcel.a
+strip -x ./target/xcframeworks/visionos-device/libcel.a
+
+# watchOS Simulator (combined arm64 and x86_64)
+echo "Preparing watchOS Simulator library (universal binary)"
+mkdir -p ./target/xcframeworks/watchos-simulator
+lipo -create ./target/aarch64-apple-watchos-sim/release/libcel_eval.a \
+    ./target/x86_64-apple-watchos-sim/release/libcel_eval.a \
+    -output ./target/xcframeworks/watchos-simulator/libcel.a
+strip -x ./target/xcframeworks/watchos-simulator/libcel.a
+
+# watchOS Device (arm64)
+echo "Preparing watchOS Device library"
+mkdir -p ./target/xcframeworks/watchos-device
+cp ./target/arm64_32-apple-watchos/release/libcel_eval.a ./target/xcframeworks/watchos-device/libcel.a
+strip -x ./target/xcframeworks/watchos-device/libcel.a
+
 echo "Building XCFramework"
 xcodebuild -create-xcframework \
     -library ./target/xcframeworks/ios-simulator/libcel.a -headers ./target/xcframeworks/headers/ios-simulator \
     -library ./target/xcframeworks/ios-device/libcel.a -headers ./target/xcframeworks/headers/ios-device \
     -library ./target/xcframeworks/macos/libcel.a -headers ./target/xcframeworks/headers/macos \
     -library ./target/xcframeworks/catalyst/libcel.a -headers ./target/xcframeworks/headers/catalyst \
+    -library ./target/xcframeworks/visionos-simulator/libcel.a -headers ./target/xcframeworks/headers/visionos-simulator \
+    -library ./target/xcframeworks/visionos-device/libcel.a -headers ./target/xcframeworks/headers/visionos-device \
+    -library ./target/xcframeworks/watchos-simulator/libcel.a -headers ./target/xcframeworks/headers/watchos-simulator \
+    -library ./target/xcframeworks/watchos-device/libcel.a -headers ./target/xcframeworks/headers/watchos-device \
     -output ./target/xcframeworks/libcel.xcframework
 
 echo "XCFramework built at ./target/xcframeworks/libcel.xcframework"
