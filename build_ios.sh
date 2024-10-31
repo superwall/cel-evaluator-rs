@@ -88,7 +88,7 @@ for TARGET in \
 do
     rustup target add $TARGET
     echo "Building for $TARGET"
-    cargo +nightly build --target=$TARGET --lib --release
+    cargo build --target=$TARGET --lib --release
 done
 
 # For visionOS device
