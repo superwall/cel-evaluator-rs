@@ -1,6 +1,11 @@
 # CHANGELOG
 
+## 0.1.16
+
+- Bumped version for iOS cocoapods fix.
+
 ## 0.1.15
+
 - Add watchOS, visionOS and Catalyst targets
 
 ## 0.1.12
