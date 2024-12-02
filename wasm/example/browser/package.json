@@ -1,7 +1,7 @@
 {
   "name": "example",
   "version": "0.1.0",
-  "homepage": "https://superwall.github.io/cel-evaluator-rs",
+  "homepage": "https://superwall.github.io/superscript",
   "private": true,
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
