@@ -1,8 +1,8 @@
-## Mobile CEL runtime
+## Superscript runtime
 
-This is the Mobile Android CEL runtime library.
-It is a standalone library that can be used to evaluate CEL expressions in Mobile applications by using
-`cel-rust` crate.
+This is the Superscript runtime library.
+It is a standalone library that can be used to evaluate Superscript expressions in Mobile applications by using
+`cel-rust` crate with addons for dynamic code execution and WASM.
 
 ## Installation
 
