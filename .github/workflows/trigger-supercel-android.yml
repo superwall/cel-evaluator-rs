@@ -1,4 +1,4 @@
-name: Trigger SuperCEL-Android Workflow
+name: Trigger Superscript-Android Workflow
 
 on:
   push:
@@ -13,5 +13,5 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.PAT }}
-          repository: superwall/SuperCEL-Android
+          repository: superwall/Superscript-Android
           event-type: update-build
